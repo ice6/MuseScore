@@ -30,6 +30,7 @@
 #include "inspector/alignSelect.h"
 #include "inspector/offsetSelect.h"
 #include "inspector/fontStyleSelect.h"
+#include "preferences.h"
 
 namespace Ms {
 
@@ -44,7 +45,7 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
       setupUi(this);
       setWindowFlags(this->windowFlags() & ~Qt::WindowContextHelpButtonHint);
       buttonApplyToAllParts = buttonBox->addButton(tr("Apply to all Parts"), QDialogButtonBox::ApplyRole);
-      buttonApplyToAllParts->setEnabled(!cs->isMaster());
+      //buttonApplyToAllParts->setEnabled(!cs->isMaster()); // set in showEvent() now
       buttonTogglePagelist->setIcon(QIcon(*icons[int(Icons::goNext_ICON)]));
       setModal(true);
 
@@ -164,8 +165,10 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
       { Sid::createMultiMeasureRests, false, multiMeasureRests,       0 },
       { Sid::minEmptyMeasures,        false, minEmptyMeasures,        0 },
       { Sid::minMMRestWidth,          false, minMeasureWidth,         resetMinMMRestWidth },
+      { Sid::mmRestNumberPos,         false, mmRestNumberPos,         resetMMRestNumberPos },
       { Sid::hideEmptyStaves,         false, hideEmptyStaves,         0 },
-      { Sid::dontHideStavesInFirstSystem, false, dontHideStavesInFirstSystem,             0 },
+      { Sid::dontHideStavesInFirstSystem, false, dontHideStavesInFirstSystem, 0 },
+      { Sid::alwaysShowBracketsWhenEmptyStavesAreHidden, false, alwaysShowBrackets, 0 },
       { Sid::hideInstrumentNameIfOneInstrument, false, hideInstrumentNameIfOneInstrument, 0 },
       { Sid::accidentalNoteDistance,  false, accidentalNoteDistance,  0 },
       { Sid::accidentalDistance,      false, accidentalDistance,      0 },
@@ -279,7 +282,9 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
       { Sid::showMeasureNumberOne,     false, showFirstMeasureNumber,       0 },
       { Sid::measureNumberInterval,    false, intervalMeasureNumber,        0 },
       { Sid::measureNumberSystem,      false, showEverySystemMeasureNumber, 0 },
-      { Sid::measureNumberAllStaffs,   false, showAllStaffsMeasureNumber,   0 },
+      { Sid::measureNumberAllStaves,   false, showAllStavesMeasureNumber,   0 },
+      { Sid::measureNumberVPlacement,  false, measureNumberVPlacement,      resetMeasureNumberVPlacement },
+      { Sid::measureNumberHPlacement,  false, measureNumberHPlacement,      resetMeasureNumberHPlacement },
 
       { Sid::beamDistance,             true,  beamDistance,                 0 },
       { Sid::beamNoSlope,              false, beamNoSlope,                  0 },
@@ -371,12 +376,18 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
       for (QComboBox* cb : std::vector<QComboBox*> {
             lyricsPlacement, textLinePlacement, hairpinPlacement, pedalLinePlacement,
             trillLinePlacement, vibratoLinePlacement, dynamicsPlacement,
-            tempoTextPlacement, staffTextPlacement, rehearsalMarkPlacement
+            tempoTextPlacement, staffTextPlacement, rehearsalMarkPlacement,
+            measureNumberVPlacement
             }) {
             cb->clear();
             cb->addItem(tr("Above"), int(Placement::ABOVE));
             cb->addItem(tr("Below"), int(Placement::BELOW));
             }
+
+      measureNumberHPlacement->clear();
+      measureNumberHPlacement->addItem(tr("Left"),   int(HPlacement::LEFT));
+      measureNumberHPlacement->addItem(tr("Center"), int(HPlacement::CENTER));
+      measureNumberHPlacement->addItem(tr("Right"),  int(HPlacement::RIGHT));
 
       autoplaceVerticalAlignRange->clear();
       autoplaceVerticalAlignRange->addItem(tr("Segment"), int(VerticalAlignRange::SEGMENT));
@@ -478,7 +489,9 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
             }
       toolTipHeaderFooter += QString("</table></body></html>");
       showHeader->setToolTip(toolTipHeaderFooter);
+      showHeader->setToolTipDuration(5000); // leaving the default value of -1 calculates the duration automatically and it takes too long
       showFooter->setToolTip(toolTipHeaderFooter);
+      showFooter->setToolTipDuration(5000);
 
       connect(buttonBox,           SIGNAL(clicked(QAbstractButton*)), SLOT(buttonClicked(QAbstractButton*)));
       connect(headerOddEven,       SIGNAL(toggled(bool)),             SLOT(toggleHeaderOddEven(bool)));
@@ -493,12 +506,11 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
 
       chordDescriptionFileButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
 
-      connect(SwingOff,            SIGNAL(toggled(bool)),             SLOT(setSwingParams(bool)));
+      connect(swingOff,            SIGNAL(toggled(bool)),             SLOT(setSwingParams(bool)));
       connect(swingEighth,         SIGNAL(toggled(bool)),             SLOT(setSwingParams(bool)));
       connect(swingSixteenth,      SIGNAL(toggled(bool)),             SLOT(setSwingParams(bool)));
 
       connect(concertPitch,        SIGNAL(toggled(bool)),             SLOT(concertPitchToggled(bool)));
-      connect(hideEmptyStaves,     SIGNAL(clicked(bool)), dontHideStavesInFirstSystem, SLOT(setEnabled(bool)));
       connect(lyricsDashMinLength, SIGNAL(valueChanged(double)),      SLOT(lyricsDashMinLengthValueChanged(double)));
       connect(lyricsDashMaxLength, SIGNAL(valueChanged(double)),      SLOT(lyricsDashMaxLengthValueChanged(double)));
       connect(minSystemDistance,   SIGNAL(valueChanged(double)),      SLOT(systemMinDistanceValueChanged(double)));
@@ -556,6 +568,11 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
 
             mapper2->setMapping(sw.widget, int(sw.idx));
             }
+
+      int topBottomMargin = automaticCapitalization->rect().height() - preferences.getInt(PREF_UI_THEME_FONTSIZE);
+      topBottomMargin /= 2;
+      topBottomMargin = topBottomMargin > 4 ? topBottomMargin - 4 : 0;
+      automaticCapitalization->layout()->setContentsMargins(9, topBottomMargin, 9, topBottomMargin);
 
       connect(mapper,  SIGNAL(mapped(int)), SLOT(resetStyleValue(int)));
       connect(mapper2, SIGNAL(mapped(int)), SLOT(valueChanged(int)));
@@ -687,7 +704,7 @@ EditStyle::EditStyle(Score* s, QWidget* parent)
 const std::map<ElementType, EditStylePage> EditStyle::PAGES = {
       { ElementType::SCORE,               &EditStyle::PageScore    },
       { ElementType::PAGE,                &EditStyle::PagePage     },
-      { ElementType::MEASURE_NUMBER,      &EditStyle::PageSizes    },
+      { ElementType::MEASURE_NUMBER,      &EditStyle::PageMeasureNumbers },
       { ElementType::BRACKET,             &EditStyle::PageSystem   },
       { ElementType::BRACKET_ITEM,        &EditStyle::PageSystem   },
       { ElementType::CLEF,                &EditStyle::PageClefs    },
@@ -753,6 +770,16 @@ void EditStyle::gotoElement(Element* e)
       }
 
 //---------------------------------------------------------
+//   gotoElement
+///   used to go to the correct page when double-clicking on a header/footer
+//---------------------------------------------------------
+
+void EditStyle::gotoHeaderFooterPage()
+      {
+      setPage(pageStack->indexOf(PageHeaderFooter));
+      }
+
+//---------------------------------------------------------
 //   elementHasPage
 ///   check if an element has a style page related to it
 //---------------------------------------------------------
@@ -780,6 +807,7 @@ void EditStyle::showEvent(QShowEvent* ev)
       setValues();
       pageList->setFocus();
       cs->startCmd();
+      buttonApplyToAllParts->setEnabled(!cs->isMaster());
       QWidget::showEvent(ev);
       }
 
@@ -826,7 +854,7 @@ void EditStyle::on_comboFBFont_currentIndexChanged(int index)
 
       if (FiguredBass::fontData(index, 0, 0, &size, &lineHeight)) {
             doubleSpinFBSize->setValue(size);
-            spinFBLineHeight->setValue((int)(lineHeight * 100.0));
+            spinFBLineHeight->setValue(static_cast<int>(lineHeight * 100.0));
             }
       }
 
@@ -1049,6 +1077,8 @@ void EditStyle::setValues()
                   sw.widget->blockSignals(false);
             }
 
+      textStyleChanged(textStyles->currentRow());
+
       //TODO: convert the rest:
 
       QString unit(lstyle.value(Sid::swingUnit).toString());
@@ -1062,7 +1092,7 @@ void EditStyle::setValues()
             swingBox->setEnabled(true);
             }
       else if (unit == TDuration(TDuration::DurationType::V_ZERO).name()) {
-            SwingOff->setChecked(true);
+            swingOff->setChecked(true);
             swingBox->setEnabled(false);
             }
       QString s(lstyle.value(Sid::chordDescriptionFile).toString());
@@ -1082,11 +1112,9 @@ void EditStyle::setValues()
             }
       //formattingGroup->setEnabled(lstyle.chordList()->autoAdjust());
 
-      dontHideStavesInFirstSystem->setEnabled(hideEmptyStaves->isChecked());
-
       // figured bass
-      for(int i = 0; i < comboFBFont->count(); i++)
-            if(comboFBFont->itemText(i) == lstyle.value(Sid::figuredBassFontFamily).toString()) {
+      for (int i = 0; i < comboFBFont->count(); i++)
+            if (comboFBFont->itemText(i) == lstyle.value(Sid::figuredBassFontFamily).toString()) {
                   comboFBFont->setCurrentIndex(i);
                   break;
             }
@@ -1142,7 +1170,7 @@ void EditStyle::setSwingParams(bool checked)
       if (!checked)
             return;
       QVariant val;
-      if (SwingOff->isChecked()) {
+      if (swingOff->isChecked()) {
             val = TDuration(TDuration::DurationType::V_ZERO).name();
             swingBox->setEnabled(false);
             }

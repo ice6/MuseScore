@@ -169,9 +169,11 @@ enum class Pid {
       VELO_CHANGE_SPEED,
       DYNAMIC_TYPE,
       DYNAMIC_RANGE,
-      SINGLE_NOTE_DYNAMICS,
 //100
-      PLACEMENT,
+      SINGLE_NOTE_DYNAMICS,
+      CHANGE_METHOD,
+      PLACEMENT,              // Goes with P_TYPE::PLACEMENT
+      HPLACEMENT,             // Goes with P_TYPE::HPLACEMENT
       VELOCITY,
       JUMP_TO,
       PLAY_UNTIL,
@@ -206,6 +208,7 @@ enum class Pid {
       SPANNER_TRACK2,
       OFFSET2,
       BREAK_MMR,
+      MMREST_NUMBER_POS,
       REPEAT_COUNT,
 
       USER_STRETCH,
@@ -237,6 +240,10 @@ enum class Pid {
       FRET_OFFSET,
       FRET_NUM_POS,
 
+      HARMONY_VOICE_LITERAL,
+      HARMONY_VOICING,
+      HARMONY_DURATION,
+
       SYSTEM_BRACKET,
       GAP,
       AUTOPLACE,
@@ -258,7 +265,7 @@ enum class Pid {
       STAFF_SHOW_LEDGERLINES,
       STAFF_STEMLESS,
 
-      STAFF_NOTEHEAD_SCHEME,
+      HEAD_SCHEME,
       STAFF_GEN_CLEF,
       STAFF_GEN_TIMESIG,
       STAFF_GEN_KEYSIG,
@@ -339,10 +346,15 @@ enum class Pid {
       CHORD_LINE_STRAIGHT,
       TREMOLO_TYPE,
       TREMOLO_PLACEMENT,
+      TREMOLO_STROKE_STYLE,
       HARMONY_TYPE,
 
       START_WITH_LONG_NAMES,
       START_WITH_MEASURE_ONE,
+
+      PATH, // for ChordLine to make its shape changes undoable
+      
+      PREFER_SHARP_FLAT,
 
       END
       };
@@ -370,7 +382,8 @@ enum class P_TYPE : char {
       LAYOUT_BREAK,
       VALUE_TYPE,
       BEAM_MODE,
-      PLACEMENT,
+      PLACEMENT,      // ABOVE or BELOW
+      HPLACEMENT,     // LEFT, CENTER or RIGHT
       TEXT_PLACE,
       TEMPO,
       GROUPS,
@@ -389,6 +402,9 @@ enum class P_TYPE : char {
       CLEF_TYPE,        // enum class ClefType
       DYNAMIC_TYPE,     // enum class Dynamic::Type
       KEYMODE,          // enum class KeyMode
+
+      PATH,             // QPainterPath
+      HEAD_SCHEME,      // enum class NoteHead::Scheme
       };
 
 extern QVariant readProperty(Pid type, XmlReader& e);
@@ -402,5 +418,8 @@ extern Pid propertyId(const QStringRef& name);
 extern QString propertyUserName(Pid);
 
 }     // namespace Ms
+
+Q_DECLARE_METATYPE(QPainterPath); // for properties with P_TYPE::PATH
+
 #endif
 

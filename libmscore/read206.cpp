@@ -176,7 +176,7 @@ struct StyleVal2 {
       { Sid::showMeasureNumberOne,        QVariant(false) },
       { Sid::measureNumberInterval,       QVariant(5) },
       { Sid::measureNumberSystem,         QVariant(true) },
-      { Sid::measureNumberAllStaffs,      QVariant(false) },
+      { Sid::measureNumberAllStaves,      QVariant(false) },
       { Sid::smallNoteMag,                QVariant(.7) },
       { Sid::graceNoteMag,                QVariant(0.7) },
       { Sid::smallStaffMag,               QVariant(0.7) },
@@ -633,11 +633,12 @@ void readTextStyle206(MStyle* style, XmlReader& e, std::map<QString, std::map<Si
                   }
             else {
                   int idx = int(ss) - int(Tid::USER1);
-                  if ((idx < 0) || (idx > 5)) {
-                        qDebug("User style index %d outside of range [0,5].", idx);
+                  if ((int(ss) < int(Tid::USER1)) || (int(ss) > int(Tid::USER12))) {
+                        qDebug("User style index %d outside of range.", idx);
                         return;
                         }
-                  Sid sid[] = { Sid::user1Name, Sid::user2Name, Sid::user3Name, Sid::user4Name, Sid::user5Name, Sid::user6Name };
+                  Sid sid[] = { Sid::user1Name, Sid::user2Name, Sid::user3Name, Sid::user4Name, Sid::user5Name, Sid::user6Name,
+                                Sid::user7Name, Sid::user8Name, Sid::user9Name, Sid::user10Name, Sid::user11Name, Sid::user12Name};
                   style->set(sid[idx], name);
                   }
             }
@@ -1523,39 +1524,62 @@ bool readNoteProperties206(Note* note, XmlReader& e)
       }
 
 //---------------------------------------------------------
+//   ReadStyleName206
+//    For 2.x files, the style tag could be in a different
+//    position with respect to 3.x files. Since seek
+//    position is not reliable for readline in QIODevices (for
+//    example because of non-single-byte characters in at least
+//    one of the fields; some two-byte characters are counted as
+//    two single-byte characters and thus the reading could
+//    start at the wrong position)
+//---------------------------------------------------------
+
+static QString ReadStyleName206(XmlReader& e)
+      {
+      QString s;
+      QIODevice* device = e.getDevice();
+      if (!device || device->isSequential())
+            return s;
+      if (!device->isOpen())
+            device->open(QIODevice::ReadOnly);
+      const auto pos = device->pos();
+      const auto pos1 = e.characterOffset();
+      const QString tagName = e.name().toString();
+      device->seek(0);
+      XmlReader streamReader(device);
+      QString xmltag;
+      QString name;
+      for (;;) {
+            streamReader.readNextStartElement();
+            name = streamReader.name().toString();
+            if ((name == tagName) && (streamReader.characterOffset() == pos1)) {
+                  xmltag = streamReader.readXml();
+                  if (xmltag.contains("<style>")) {
+                        QRegExp re("<style>([^<]+)</style>");
+                        if (re.indexIn(xmltag) > -1)
+                              s = re.cap(1);
+                        }
+                  break;
+                  }
+            if (streamReader.atEnd())
+                  break;
+            }
+      device->seek(pos);
+      return s;
+      }
+
+//---------------------------------------------------------
 //   readTextPropertyStyle206
 //    This reads only the 'style' tag, so that it can be read
 //    before setting anything else.
 //---------------------------------------------------------
 
-static bool readTextPropertyStyle206(XmlReader& e, TextBase* t, Element* be, QStringRef elementName)
+static bool readTextPropertyStyle206(XmlReader& e, TextBase* t, Element* be)
       {
-      QString s;
-      if (e.readAheadAvailable()) {
-            e.performReadAhead([&s, &elementName](QIODevice& dev) {
-                  const QString closeTag = QString("</").append(elementName.toString()).append(">");
-                  QByteArray arrLine = dev.readLine();
-                  while (!arrLine.isEmpty()) {
-                        QString line(arrLine);
-                        if (line.contains("<style>")) {
-                              QRegExp re("<style>([^<]+)</style>");
-                              if (re.indexIn(line) > -1)
-                                    s = re.cap(1);
-                              return;
-                              }
-                        else if (line.contains(closeTag)) {
-                              return;
-                              }
-
-                        arrLine = dev.readLine();
-                        }
-                  });
-            }
-      else
-            return false;
+      QString s = ReadStyleName206(e);
 
       if (s.isEmpty())
-            return true;
+            return false;
 
       if (!be->isTuplet()) {      // Hack
             if (excessTextStyles206.find(s) != excessTextStyles206.end()) {
@@ -1594,10 +1618,12 @@ static bool readTextProperties206(XmlReader& e, TextBase* t)
             }
       else if (tag == "foregroundColor")  // same as "color" ?
             e.skipCurrentElement();
-      else if (tag == "frame")
+      else if (tag == "frame") {
             t->setFrameType(e.readBool() ? FrameType::SQUARE : FrameType::NO_FRAME);
+            t->setPropertyFlags(Pid::FRAME_TYPE, PropertyFlags::UNSTYLED);
+            }
       else if (tag == "frameRound")
-            t->setFrameRound(e.readInt());
+            t->readProperty(e, Pid::FRAME_ROUND);
       else if (tag == "circle") {
             if (e.readBool())
                   t->setFrameType(FrameType::CIRCLE);
@@ -1605,15 +1631,16 @@ static bool readTextProperties206(XmlReader& e, TextBase* t)
                   if (t->circle())
                         t->setFrameType(FrameType::SQUARE);
                   }
+            t->setPropertyFlags(Pid::FRAME_TYPE, PropertyFlags::UNSTYLED);
             }
       else if (tag == "paddingWidthS")
-            t->setPaddingWidth(Spatium(e.readDouble()));
+            t->readProperty(e, Pid::FRAME_PADDING);
       else if (tag == "frameWidthS")
-            t->setFrameWidth(Spatium(e.readDouble()));
+            t->readProperty(e, Pid::FRAME_WIDTH);
       else if (tag == "frameColor")
-            t->setFrameColor(e.readColor());
+            t->readProperty(e, Pid::FRAME_FG_COLOR);
       else if (tag == "backgroundColor")
-            t->setBgColor(e.readColor());
+            t->readProperty(e, Pid::FRAME_BG_COLOR);
       else if (tag == "halign") {
             Align align = Align(int(t->align()) & int(~Align::HMASK));
             const QString& val(e.readElementText());
@@ -1626,6 +1653,7 @@ static bool readTextProperties206(XmlReader& e, TextBase* t)
             else
                   qDebug("unknown alignment: <%s>", qPrintable(val));
             t->setAlign(align);
+            t->setPropertyFlags(Pid::ALIGN, PropertyFlags::UNSTYLED);
             }
       else if (tag == "valign") {
             Align align = Align(int(t->align()) & int(~Align::VMASK));
@@ -1641,6 +1669,7 @@ static bool readTextProperties206(XmlReader& e, TextBase* t)
             else
                   qDebug("unknown alignment: <%s>", qPrintable(val));
             t->setAlign(align);
+            t->setPropertyFlags(Pid::ALIGN, PropertyFlags::UNSTYLED);
             }
       else if (tag == "pos") {
             t->readProperty(e, Pid::OFFSET);
@@ -1659,7 +1688,7 @@ static bool readTextProperties206(XmlReader& e, TextBase* t)
 
 static void readText206(XmlReader& e, TextBase* t, Element* be)
       {
-      readTextPropertyStyle206(e, t, be, e.name());
+      readTextPropertyStyle206(e, t, be);
       while (e.readNextStartElement()) {
             if (!readTextProperties206(e, t))
                   e.unknown();
@@ -1672,7 +1701,7 @@ static void readText206(XmlReader& e, TextBase* t, Element* be)
 
 static void readTempoText(TempoText* t, XmlReader& e)
       {
-      readTextPropertyStyle206(e, t, t, e.name());
+      readTextPropertyStyle206(e, t, t);
       while (e.readNextStartElement()) {
             const QStringRef& tag(e.name());
             if (tag == "tempo")
@@ -1697,7 +1726,7 @@ static void readTempoText(TempoText* t, XmlReader& e)
 
 static void readMarker(Marker* m, XmlReader& e)
       {
-      readTextPropertyStyle206(e, m, m, e.name());
+      readTextPropertyStyle206(e, m, m);
       Marker::Type mt = Marker::Type::SEGNO;
 
       while (e.readNextStartElement()) {
@@ -1719,7 +1748,7 @@ static void readMarker(Marker* m, XmlReader& e)
 
 static void readDynamic(Dynamic* d, XmlReader& e)
       {
-      readTextPropertyStyle206(e, d, d, e.name());
+      readTextPropertyStyle206(e, d, d);
       while (e.readNextStartElement()) {
             const QStringRef& tag = e.name();
             if (tag == "subtype")
@@ -3124,25 +3153,7 @@ static void readMeasure(Measure* m, int staffIdx, XmlReader& e)
                   // MuseScore 3 has different types for system text and
                   // staff text while MuseScore 2 didn't.
                   // We need to decide first which one we should create.
-                  QString styleName;
-                  if (e.readAheadAvailable()) {
-                        e.performReadAhead([&styleName, tag](QIODevice& dev) {
-                              const QString closeTag = QString("</").append(tag).append(">");
-                              QByteArray arrLine = dev.readLine();
-                              while (!arrLine.isEmpty()) {
-                                    QString line(arrLine);
-                                    if (line.contains("<style>")) {
-                                          QRegExp re("<style>([A-z0-9]+)</style>");
-                                          if (re.indexIn(line) > -1)
-                                                styleName = re.cap(1);
-                                          return;
-                                          }
-                                    if (line.contains(closeTag))
-                                          return;
-                                    arrLine = dev.readLine();
-                                    }
-                              });
-                        }
+                  QString styleName = ReadStyleName206(e);
                   StaffTextBase* t;
                   if (styleName == "System"   || styleName == "Tempo"
                      || styleName == "Marker" || styleName == "Jump"
@@ -3268,8 +3279,7 @@ static void readMeasure(Measure* m, int staffIdx, XmlReader& e)
                         Element* el = Element::name2Element(tag, score);
                         el->setTrack(e.track());
                         el->read(e);
-                        segment = m->getSegment(SegmentType::ChordRest, e.tick());
-                        segment->add(el);
+                        m->add(el);
                         }
                   }
             //----------------------------------------------------
@@ -3889,6 +3899,11 @@ static bool readScore(Score* score, XmlReader& e)
             }
 #endif
       score->fixTicks();
+
+      for (Part* p : score->parts()) {
+            p->updateHarmonyChannels(false);
+            }
+
       if (score->isMaster()) {
             MasterScore* ms = static_cast<MasterScore*>(score);
             if (!ms->omr())
@@ -3897,6 +3912,7 @@ static bool readScore(Score* score, XmlReader& e)
             ms->updateChannel();
  //           ms->createPlayEvents();
             }
+
       return true;
       }
 

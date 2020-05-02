@@ -130,7 +130,7 @@ void Image::draw(QPainter* painter) const
                         s = _size * spatium();
                   else
                         s = _size * DPMM;
-                  if (score()->printing() && !MScore::svgPrinting) {
+                  if (score() && score()->printing() && !MScore::svgPrinting) {
                         // use original image size for printing, but not for svg for reasonable file size.
                         painter->scale(s.width() / rasterDoc->width(), s.height() / rasterDoc->height());
                         painter->drawPixmap(QPointF(0, 0), QPixmap::fromImage(*rasterDoc));
@@ -354,24 +354,15 @@ bool Image::loadFromData(const QString& ss, const QByteArray& ba)
       }
 
 //---------------------------------------------------------
-//   ImageEditData
-//---------------------------------------------------------
-
-class ImageEditData : public ElementEditData {
-   public:
-      QSizeF size;
-      };
-
-//---------------------------------------------------------
 //   startDrag
 //---------------------------------------------------------
 
 void Image::startEditDrag(EditData& data)
       {
-      ImageEditData* ed = new ImageEditData();
-      ed->e    = this;
-      ed->size = _size;
-      data.addData(ed);
+      BSymbol::startEditDrag(data);
+      ElementEditData* eed = data.getData(this);
+
+      eed->pushProperty(Pid::SIZE);
       }
 
 //---------------------------------------------------------
@@ -403,17 +394,6 @@ void Image::editDrag(EditData& ed)
                   _size.setWidth(_size.height() * ratio);
             }
       layout();
-      }
-
-//---------------------------------------------------------
-//   endEditDrag
-//---------------------------------------------------------
-
-void Image::endEditDrag(EditData& ed)
-      {
-      ImageEditData* ied = static_cast<ImageEditData*>(ed.getData(this));
-      if (_size != ied->size)
-            score()->undoPropertyChanged(this, Pid::SIZE, ied->size);
       }
 
 //---------------------------------------------------------

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>912</width>
-    <height>660</height>
+    <height>692</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -247,7 +247,7 @@
        </size>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>4</number>
       </property>
       <widget class="QWidget" name="PageScore">
        <layout class="QVBoxLayout" name="verticalLayout_20">
@@ -390,6 +390,29 @@
              <layout class="QVBoxLayout" name="verticalLayout_5">
               <item>
                <layout class="QGridLayout" name="gridLayout_30">
+                <item row="0" column="1">
+                 <widget class="QSpinBox" name="minEmptyMeasures">
+                  <property name="minimum">
+                   <number>1</number>
+                  </property>
+                  <property name="value">
+                   <number>2</number>
+                  </property>
+                 </widget>
+                </item>
+                <item row="1" column="1">
+                 <widget class="QDoubleSpinBox" name="minMeasureWidth">
+                  <property name="suffix">
+                   <string>sp</string>
+                  </property>
+                  <property name="minimum">
+                   <double>2.000000000000000</double>
+                  </property>
+                  <property name="value">
+                   <double>4.000000000000000</double>
+                  </property>
+                 </widget>
+                </item>
                 <item row="1" column="2">
                  <widget class="QToolButton" name="resetMinMMRestWidth">
                   <property name="toolTip">
@@ -407,22 +430,6 @@
                   </property>
                  </widget>
                 </item>
-                <item row="0" column="1">
-                 <widget class="QSpinBox" name="minEmptyMeasures">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="minimum">
-                   <number>1</number>
-                  </property>
-                  <property name="value">
-                   <number>2</number>
-                  </property>
-                 </widget>
-                </item>
                 <item row="0" column="0">
                  <widget class="QLabel" name="label_15">
                   <property name="text">
@@ -430,25 +437,6 @@
                   </property>
                   <property name="buddy">
                    <cstring>minEmptyMeasures</cstring>
-                  </property>
-                 </widget>
-                </item>
-                <item row="1" column="1">
-                 <widget class="QDoubleSpinBox" name="minMeasureWidth">
-                  <property name="sizePolicy">
-                   <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
-                    <horstretch>0</horstretch>
-                    <verstretch>0</verstretch>
-                   </sizepolicy>
-                  </property>
-                  <property name="suffix">
-                   <string>sp</string>
-                  </property>
-                  <property name="minimum">
-                   <double>2.000000000000000</double>
-                  </property>
-                  <property name="value">
-                   <double>4.000000000000000</double>
                   </property>
                  </widget>
                 </item>
@@ -475,23 +463,75 @@
                   </property>
                  </spacer>
                 </item>
+                <item row="2" column="0">
+                 <widget class="QLabel" name="label_92">
+                  <property name="text">
+                   <string>Vertical position of number:</string>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="1">
+                 <widget class="QDoubleSpinBox" name="mmRestNumberPos">
+                  <property name="suffix">
+                   <string>sp</string>
+                  </property>
+                  <property name="minimum">
+                   <double>-99.989999999999995</double>
+                  </property>
+                  <property name="singleStep">
+                   <double>0.500000000000000</double>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="2">
+                 <widget class="QToolButton" name="resetMMRestNumberPos">
+                  <property name="toolTip">
+                   <string>Reset to default</string>
+                  </property>
+                  <property name="accessibleName">
+                   <string>Reset 'Vertical position of number' value</string>
+                  </property>
+                  <property name="text">
+                   <string notr="true"/>
+                  </property>
+                  <property name="icon">
+                   <iconset resource="musescore.qrc">
+                    <normaloff>:/data/icons/edit-reset.svg</normaloff>:/data/icons/edit-reset.svg</iconset>
+                  </property>
+                 </widget>
+                </item>
                </layout>
               </item>
              </layout>
             </widget>
            </item>
            <item>
-            <widget class="QCheckBox" name="hideEmptyStaves">
-             <property name="text">
+            <widget class="QGroupBox" name="hideEmptyStaves">
+             <property name="title">
               <string>Hide empty staves within systems</string>
              </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QCheckBox" name="dontHideStavesInFirstSystem">
-             <property name="text">
-              <string>Don't hide empty staves in first system</string>
+             <property name="checkable">
+              <bool>true</bool>
              </property>
+             <property name="checked">
+              <bool>false</bool>
+             </property>
+             <layout class="QVBoxLayout" name="verticalLayout_2">
+              <item>
+               <widget class="QCheckBox" name="dontHideStavesInFirstSystem">
+                <property name="text">
+                 <string>Don't hide empty staves in first system</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QCheckBox" name="alwaysShowBrackets">
+                <property name="text">
+                 <string>Always show brackets which span to single staff</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </widget>
            </item>
            <item>
@@ -540,7 +580,7 @@
                  </widget>
                 </item>
                 <item>
-                 <widget class="QRadioButton" name="SwingOff">
+                 <widget class="QRadioButton" name="swingOff">
                   <property name="text">
                    <string>Off</string>
                   </property>
@@ -2069,6 +2109,23 @@
            <bool>true</bool>
           </property>
           <layout class="QGridLayout" name="_2">
+           <item row="0" column="0">
+            <widget class="QCheckBox" name="showFirstMeasureNumber">
+             <property name="text">
+              <string>Show first</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QCheckBox" name="showAllStavesMeasureNumber">
+             <property name="text">
+              <string>All staves</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="5">
+            <widget class="QComboBox" name="measureNumberHPlacement"/>
+           </item>
            <item row="2" column="2">
             <spacer name="horizontalSpacer_18">
              <property name="orientation">
@@ -2082,12 +2139,15 @@
              </property>
             </spacer>
            </item>
-           <item row="2" column="0">
-            <widget class="QRadioButton" name="showEverySystemMeasureNumber">
+           <item row="1" column="4">
+            <widget class="QLabel" name="label_93">
              <property name="text">
-              <string>Every system</string>
+              <string>Horizontal placement:</string>
              </property>
             </widget>
+           </item>
+           <item row="0" column="5">
+            <widget class="QComboBox" name="measureNumberVPlacement"/>
            </item>
            <item row="4" column="0" colspan="2">
             <layout class="QHBoxLayout" name="horizontalLayout_8">
@@ -2113,17 +2173,33 @@
              </item>
             </layout>
            </item>
-           <item row="0" column="0">
-            <widget class="QCheckBox" name="showFirstMeasureNumber">
+           <item row="2" column="0">
+            <widget class="QRadioButton" name="showEverySystemMeasureNumber">
              <property name="text">
-              <string>Show first</string>
+              <string>Every system</string>
              </property>
             </widget>
            </item>
-           <item row="1" column="0">
-            <widget class="QCheckBox" name="showAllStaffsMeasureNumber">
+           <item row="0" column="4">
+            <widget class="QLabel" name="label_921">
              <property name="text">
-              <string>All staves</string>
+              <string>Vertical placement:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="6">
+            <widget class="QToolButton" name="resetMeasureNumberVPlacement">
+             <property name="icon">
+              <iconset resource="musescore.qrc">
+               <normaloff>:/data/icons/edit-reset.svg</normaloff>:/data/icons/edit-reset.svg</iconset>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="6">
+            <widget class="QToolButton" name="resetMeasureNumberHPlacement">
+             <property name="icon">
+              <iconset resource="musescore.qrc">
+               <normaloff>:/data/icons/edit-reset.svg</normaloff>:/data/icons/edit-reset.svg</iconset>
              </property>
             </widget>
            </item>
@@ -9354,7 +9430,7 @@
               <item row="1" column="1">
                <widget class="QDoubleSpinBox" name="extensionAdjust">
                 <property name="minimum">
-                 <double>-99.99</double>
+                 <double>-99.989999999999995</double>
                 </property>
                </widget>
               </item>
@@ -9388,7 +9464,7 @@
               <item row="1" column="4">
                <widget class="QDoubleSpinBox" name="modifierAdjust">
                 <property name="minimum">
-                 <double>-99.99</double>
+                 <double>-99.989999999999995</double>
                 </property>
                </widget>
               </item>
@@ -10201,8 +10277,7 @@
                   <number>0</number>
                  </property>
                  <item row="0" column="1">
-                  <widget class="Awl::ColorLabel" name="textStyleFrameForeground">
-                  </widget>
+                  <widget class="Awl::ColorLabel" name="textStyleFrameForeground"/>
                  </item>
                  <item row="2" column="0">
                   <widget class="QLabel" name="label_205">
@@ -10287,8 +10362,7 @@
                   <widget class="QDoubleSpinBox" name="textStyleFramePadding"/>
                  </item>
                  <item row="1" column="1">
-                  <widget class="Awl::ColorLabel" name="textStyleFrameBackground">
-                  </widget>
+                  <widget class="Awl::ColorLabel" name="textStyleFrameBackground"/>
                  </item>
                  <item row="3" column="2">
                   <widget class="QToolButton" name="resetTextStyleFramePadding">
@@ -10348,8 +10422,7 @@
             </widget>
            </item>
            <item row="6" column="1">
-            <widget class="Awl::ColorLabel" name="textStyleColor">
-            </widget>
+            <widget class="Awl::ColorLabel" name="textStyleColor"/>
            </item>
            <item row="7" column="1">
             <widget class="Ms::OffsetSelect" name="textStyleOffset" native="true"/>
@@ -10545,9 +10618,10 @@
   <tabstop>resetMinMMRestWidth</tabstop>
   <tabstop>hideEmptyStaves</tabstop>
   <tabstop>dontHideStavesInFirstSystem</tabstop>
+  <tabstop>alwaysShowBrackets</tabstop>
   <tabstop>crossMeasureValues</tabstop>
   <tabstop>hideInstrumentNameIfOneInstrument</tabstop>
-  <tabstop>SwingOff</tabstop>
+  <tabstop>swingOff</tabstop>
   <tabstop>swingEighth</tabstop>
   <tabstop>swingSixteenth</tabstop>
   <tabstop>swingBox</tabstop>
@@ -10606,10 +10680,14 @@
   <tabstop>evenFooterR</tabstop>
   <tabstop>showMeasureNumber</tabstop>
   <tabstop>showFirstMeasureNumber</tabstop>
-  <tabstop>showAllStaffsMeasureNumber</tabstop>
+  <tabstop>showAllStavesMeasureNumber</tabstop>
   <tabstop>showEverySystemMeasureNumber</tabstop>
   <tabstop>showIntervalMeasureNumber</tabstop>
   <tabstop>intervalMeasureNumber</tabstop>
+  <tabstop>measureNumberVPlacement</tabstop>
+  <tabstop>resetMeasureNumberVPlacement</tabstop>
+  <tabstop>measureNumberHPlacement</tabstop>
+  <tabstop>resetMeasureNumberHPlacement</tabstop>
   <tabstop>bracketWidth</tabstop>
   <tabstop>akkoladeWidth</tabstop>
   <tabstop>bracketDistance</tabstop>
@@ -10936,6 +11014,9 @@
   <tabstop>textStyleFrameBorderRadius</tabstop>
   <tabstop>resetTextStyleFrameBorderRadius</tabstop>
   <tabstop>buttonTogglePagelist</tabstop>
+  <tabstop>textStyleFrameForeground</tabstop>
+  <tabstop>textStyleFrameBackground</tabstop>
+  <tabstop>textStyleColor</tabstop>
  </tabstops>
  <resources>
   <include location="musescore.qrc"/>

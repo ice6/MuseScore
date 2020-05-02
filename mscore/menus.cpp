@@ -83,6 +83,7 @@
 #include "libmscore/vibrato.h"
 #include "libmscore/palmmute.h"
 #include "libmscore/fermata.h"
+#include "libmscore/measurenumber.h"
 
 #include "palette/palettetree.h"
 #include "palette/palettewidget.h"
@@ -1219,7 +1220,7 @@ PalettePanel* MuseScore::newClefsPalettePanel(bool defaultPalettePanel)
       static std::vector<ClefType> clefsMaster  {
             ClefType::G,     ClefType::G8_VA,  ClefType::G15_MA,  ClefType::G8_VB, ClefType::G15_MB, ClefType::G8_VB_O,
             ClefType::G8_VB_P,    ClefType::G_1,  ClefType::C1,  ClefType::C2,    ClefType::C3,
-            ClefType::C4,    ClefType::C5,  ClefType::C_19C, ClefType::C3_F18C, ClefType::C4_F18C, ClefType::C3_F20C, ClefType::C4_F20C,
+            ClefType::C4,    ClefType::C5,  ClefType::C_19C, ClefType::C1_F18C, ClefType::C3_F18C, ClefType::C4_F18C, ClefType::C1_F20C, ClefType::C3_F20C, ClefType::C4_F20C,
              ClefType::F,   ClefType::F_8VA, ClefType::F_15MA,
             ClefType::F8_VB,    ClefType::F15_MB, ClefType::F_B, ClefType::F_C, ClefType::F_F18C, ClefType::F_19C,  ClefType::PERC,
             ClefType::PERC2, ClefType::TAB, ClefType::TAB4, ClefType::TAB_SERIF, ClefType::TAB4_SERIF
@@ -1531,6 +1532,7 @@ PalettePanel* MuseScore::newTempoPalettePanel(bool defaultPalettePanel)
             TempoPattern("<sym>metNoteQuarterUp</sym> = <sym>metNoteHalfUp</sym>",    2.0/1.0, true, false, true, false, false),
             TempoPattern("<sym>metNote8thUp</sym> = <sym>metNote8thUp</sym>",         1.0/1.0, true, false, true, false, false),
             TempoPattern("<sym>metNoteQuarterUp</sym> = <sym>metNoteQuarterUp</sym>", 1.0/1.0, true, false, true, false, false),
+            TempoPattern("<sym>metNote8thUp</sym><sym>space</sym><sym>metAugmentationDot</sym> = <sym>metNoteQuarterUp</sym>", 2.0/3.0, true, false, true, false, false),
             };
       for (TempoPattern tp : tps) {
             TempoText* tt = new TempoText(gscore);
@@ -1595,7 +1597,10 @@ PalettePanel* MuseScore::newTextPalettePanel(bool defaultPalettePanel)
       stxt = new SystemText(gscore, Tid::TEMPO);
       /*: System text to switch from swing rhythm back to straight rhythm */
       stxt->setXmlText(QT_TRANSLATE_NOOP("Palette", "Straight"));
-      stxt->setSwing(false); // redundant, being the default anyhow, but for documentation
+      // need to be true to enable the "Off" option
+      stxt->setSwing(true);
+      // 0 (swingUnit) turns of swing; swingRatio is set to default
+      stxt->setSwingParameters(0, stxt->score()->styleI(Sid::swingRatio));
       /*: System text to switch from swing rhythm back to straight rhythm */
       sp->append(stxt, QT_TRANSLATE_NOOP("Palette", "Straight"))->setElementTranslated(true);
 
@@ -1603,35 +1608,95 @@ PalettePanel* MuseScore::newTextPalettePanel(bool defaultPalettePanel)
       stxt->setXmlText(QT_TRANSLATE_NOOP("Palette", "System Text"));
       sp->append(stxt, QT_TRANSLATE_NOOP("Palette", "System text"))->setElementTranslated(true);
 
+      // Measure numbers, unlike other elements (but like most text elements),
+      // are not copied directly into the score when drop.
+      // Instead, they simply set the corresponding measure's MeasureNumberMode to SHOW
+      // Because of that, the element shown in the palettes does not have to have any particular formatting.
+      MeasureNumber* meaNum = new MeasureNumber(gscore);
+      meaNum->setProperty(Pid::SUB_STYLE, int(Tid::STAFF)); // Make the element bigger in the palettes (using the default measure number style makes it too small)
+      meaNum->setXmlText(QT_TRANSLATE_NOOP("Palette", "Measure Number"));
+      sp->append(meaNum, QT_TRANSLATE_NOOP("Palette", "Measure Number"))->setElementTranslated(true);
+
       if (!defaultPalettePanel) {
             StaffText* pz = new StaffText(gscore);
             pz->setXmlText(QT_TRANSLATE_NOOP("Palette", "pizz."));
             pz->setChannelName(0, "pizzicato");
+            pz->setChannelName(1, "pizzicato");
+            pz->setChannelName(2, "pizzicato");
+            pz->setChannelName(3, "pizzicato");
             sp->append(pz, QT_TRANSLATE_NOOP("Palette", "Pizzicato"))->setElementTranslated(true);
 
             StaffText* ar = new StaffText(gscore);
             ar->setXmlText(QT_TRANSLATE_NOOP("Palette", "arco"));
             ar->setChannelName(0, "arco");
+            ar->setChannelName(1, "arco");
+            ar->setChannelName(2, "arco");
+            ar->setChannelName(3, "arco");
             sp->append(ar, QT_TRANSLATE_NOOP("Palette", "Arco"))->setElementTranslated(true);
 
             StaffText* tm = new StaffText(gscore, Tid::EXPRESSION);
             tm->setXmlText(QT_TRANSLATE_NOOP("Palette", "tremolo"));
             tm->setChannelName(0, "tremolo");
+            tm->setChannelName(1, "tremolo");
+            tm->setChannelName(2, "tremolo");
+            tm->setChannelName(3, "tremolo");
             sp->append(tm, QT_TRANSLATE_NOOP("Palette", "Tremolo"))->setElementTranslated(true);
 
             StaffText* mu = new StaffText(gscore);
-            /*: For brass instruments: staff text that prescribes to use mute while playing, see https://en.wikipedia.org/wiki/Mute_(music) */
+            /*: For brass and plucked string instruments: staff text that prescribes to use mute while playing, see https://en.wikipedia.org/wiki/Mute_(music) */
             mu->setXmlText(QT_TRANSLATE_NOOP("Palette", "mute"));
             mu->setChannelName(0, "mute");
-            /*: For brass instruments: staff text that prescribes to use mute while playing, see https://en.wikipedia.org/wiki/Mute_(music) */
+            mu->setChannelName(1, "mute");
+            mu->setChannelName(2, "mute");
+            mu->setChannelName(3, "mute");
+            /*: For brass and plucked string instruments: staff text that prescribes to use mute while playing, see https://en.wikipedia.org/wiki/Mute_(music) */
             sp->append(mu, QT_TRANSLATE_NOOP("Palette", "Mute"))->setElementTranslated(true);
 
             StaffText* no = new StaffText(gscore);
-            /*: For brass instruments: staff text that prescribes to play without mute, see https://en.wikipedia.org/wiki/Mute_(music) */
+            /*: For brass and plucked string instruments: staff text that prescribes to play without mute, see https://en.wikipedia.org/wiki/Mute_(music) */
             no->setXmlText(QT_TRANSLATE_NOOP("Palette", "open"));
             no->setChannelName(0, "open");
-            /*: For brass instruments: staff text that prescribes to play without mute, see https://en.wikipedia.org/wiki/Mute_(music) */
+            no->setChannelName(1, "open");
+            no->setChannelName(2, "open");
+            no->setChannelName(3, "open");
+            /*: For brass and plucked string instruments: staff text that prescribes to play without mute, see https://en.wikipedia.org/wiki/Mute_(music) */
             sp->append(no, QT_TRANSLATE_NOOP("Palette", "Open"))->setElementTranslated(true);
+
+            StaffText* sa = new StaffText(gscore);
+            sa->setXmlText(QT_TRANSLATE_NOOP("Palette", "S/A"));
+            sa->setChannelName(0, "Soprano");
+            sa->setChannelName(1, "Alto");
+            sa->setChannelName(2, "Soprano");
+            sa->setChannelName(3, "Alto");
+            sa->setVisible(false);
+            sp->append(sa, QT_TRANSLATE_NOOP("Palette", "Soprano/Alto"))->setElementTranslated(true);
+
+            StaffText* tb = new StaffText(gscore);
+            tb->setXmlText(QT_TRANSLATE_NOOP("Palette", "T/B"));
+            tb->setChannelName(0, "Tenor");
+            tb->setChannelName(1, "Bass");
+            tb->setChannelName(2, "Tenor");
+            tb->setChannelName(3, "Bass");
+            tb->setVisible(false);
+            sp->append(tb, QT_TRANSLATE_NOOP("Palette", "Tenor/Bass"))->setElementTranslated(true);
+
+            StaffText* tl = new StaffText(gscore);
+            tl->setXmlText(QT_TRANSLATE_NOOP("Palette", "T/L"));
+            tl->setChannelName(0, "TENOR");
+            tl->setChannelName(1, "LEAD");
+            tl->setChannelName(2, "TENOR");
+            tl->setChannelName(3, "LEAD");
+            tl->setVisible(false);
+            sp->append(tl, QT_TRANSLATE_NOOP("Palette", "Tenor/Lead"))->setElementTranslated(true);
+
+            StaffText* bb = new StaffText(gscore);
+            bb->setXmlText(QT_TRANSLATE_NOOP("Palette", "B/B"));
+            bb->setChannelName(0, "BARI");
+            bb->setChannelName(1, "BASS");
+            bb->setChannelName(2, "BARI");
+            bb->setChannelName(3, "BASS");
+            bb->setVisible(false);
+            sp->append(bb, QT_TRANSLATE_NOOP("Palette", "Bari/Bass"))->setElementTranslated(true);
             }
 
       return sp;

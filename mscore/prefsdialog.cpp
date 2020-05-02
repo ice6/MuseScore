@@ -18,22 +18,27 @@
 //=============================================================================
 
 #include "musescore.h"
+#include "timeline.h"
 #include "preferences.h"
 #include "prefsdialog.h"
 #include "seq.h"
 #include "shortcutcapturedialog.h"
 #include "scoreview.h"
-#include "pa.h"
 #include "shortcut.h"
 #include "workspace.h"
 
+#include "audio/drivers/pa.h"
 #ifdef USE_PORTMIDI
-#include "pm.h"
+#include "audio/drivers/pm.h"
 #endif
 
 #include "pathlistdialog.h"
 #include "resourceManager.h"
-#include "synthesizer/msynthesizer.h"
+#include "audio/midi/msynthesizer.h"
+
+#ifdef AVSOMR
+#include "avsomr/avsomrlocal.h"
+#endif
 
 namespace Ms {
 
@@ -45,10 +50,10 @@ void MuseScore::startPreferenceDialog()
       {
       if (!preferenceDialog) {
             preferenceDialog = new PreferenceDialog(this);
-            connect(preferenceDialog, SIGNAL(preferencesChanged()),
-               SLOT(preferencesChanged()));
-            connect(preferenceDialog, SIGNAL(mixerPreferencesChanged(bool)),
-               SLOT(mixerPreferencesChanged(bool)));
+            connect(preferenceDialog, &PreferenceDialog::preferencesChangedWithBool, this,
+               &MuseScore::preferencesChanged);
+            connect(preferenceDialog, &PreferenceDialog::mixerPreferencesChanged, this,
+               &MuseScore::mixerPreferencesChanged);
             }
       preferenceDialog->start();
       }
@@ -136,28 +141,28 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       fgButtons->setExclusive(true);
       fgButtons->addButton(fgColorButton);
       fgButtons->addButton(fgWallpaperButton);
-      connect(fgColorButton, SIGNAL(toggled(bool)), SLOT(updateFgView(bool)));
+      connect(fgColorButton, &QRadioButton::toggled, this, &PreferenceDialog::updateFgView);
 
       QButtonGroup* bgButtons = new QButtonGroup(this);
       bgButtons->setExclusive(true);
       bgButtons->addButton(bgColorButton);
       bgButtons->addButton(bgWallpaperButton);
-      connect(bgColorButton, SIGNAL(toggled(bool)), SLOT(updateBgView(bool)));
+      connect(bgColorButton, &QRadioButton::toggled, this, &PreferenceDialog::updateBgView);
 
-      connect(buttonBox,          SIGNAL(clicked(QAbstractButton*)), SLOT(buttonBoxClicked(QAbstractButton*)));
-      connect(fgWallpaperSelect,  SIGNAL(clicked()), SLOT(selectFgWallpaper()));
-      connect(bgWallpaperSelect,  SIGNAL(clicked()), SLOT(selectBgWallpaper()));
+      connect(buttonBox,            &QDialogButtonBox::clicked, this, &PreferenceDialog::buttonBoxClicked);
+      connect(fgWallpaperSelect,    &QToolButton::clicked, this, &PreferenceDialog::selectFgWallpaper);
+      connect(bgWallpaperSelect,    &QToolButton::clicked, this, &PreferenceDialog::selectBgWallpaper);
 
       bgWallpaperSelect->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       fgWallpaperSelect->setIcon(*icons[int(Icons::fileOpen_ICON)]);
 
-      connect(myScoresButton, SIGNAL(clicked()), SLOT(selectScoresDirectory()));
-      connect(myStylesButton, SIGNAL(clicked()), SLOT(selectStylesDirectory()));
-      connect(myTemplatesButton, SIGNAL(clicked()), SLOT(selectTemplatesDirectory()));
-      connect(myPluginsButton, SIGNAL(clicked()), SLOT(selectPluginsDirectory()));
-      connect(mySoundfontsButton, SIGNAL(clicked()), SLOT(changeSoundfontPaths()));
-      connect(myImagesButton, SIGNAL(clicked()), SLOT(selectImagesDirectory()));
-      connect(myExtensionsButton, SIGNAL(clicked()), SLOT(selectExtensionsDirectory()));
+      connect(myScoresButton, &QToolButton::clicked, this, &PreferenceDialog::selectScoresDirectory);
+      connect(myStylesButton, &QToolButton::clicked, this, &PreferenceDialog::selectStylesDirectory);
+      connect(myTemplatesButton, &QToolButton::clicked, this, &PreferenceDialog::selectTemplatesDirectory);
+      connect(myPluginsButton, &QToolButton::clicked, this, &PreferenceDialog::selectPluginsDirectory);
+      connect(mySoundfontsButton, &QToolButton::clicked, this, &PreferenceDialog::changeSoundfontPaths);
+      connect(myImagesButton, &QToolButton::clicked, this, &PreferenceDialog::selectImagesDirectory);
+      connect(myExtensionsButton, &QToolButton::clicked, this, &PreferenceDialog::selectExtensionsDirectory);
 
       myScoresButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       myStylesButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
@@ -167,14 +172,14 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       myImagesButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       myExtensionsButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
 
-      connect(updateTranslation, SIGNAL(clicked()), SLOT(updateTranslationClicked()));
+      connect(updateTranslation, &QToolButton::clicked, this, &PreferenceDialog::updateTranslationClicked);
 
-      connect(defaultStyleButton,     SIGNAL(clicked()), SLOT(selectDefaultStyle()));
-      connect(partStyleButton,        SIGNAL(clicked()), SLOT(selectPartStyle()));
-      connect(styleFileButton,        SIGNAL(clicked()), SLOT(styleFileButtonClicked()));
-      connect(instrumentList1Button,  SIGNAL(clicked()), SLOT(selectInstrumentList1()));
-      connect(instrumentList2Button,  SIGNAL(clicked()), SLOT(selectInstrumentList2()));
-      connect(startWithButton,        SIGNAL(clicked()), SLOT(selectStartWith()));
+      connect(defaultStyleButton,     &QToolButton::clicked, this, &PreferenceDialog::selectDefaultStyle);
+      connect(partStyleButton,        &QToolButton::clicked, this, &PreferenceDialog::selectPartStyle);
+      connect(styleFileButton,        &QToolButton::clicked, this, &PreferenceDialog::styleFileButtonClicked);
+      connect(instrumentList1Button,  &QToolButton::clicked, this, &PreferenceDialog::selectInstrumentList1);
+      connect(instrumentList2Button,  &QToolButton::clicked, this, &PreferenceDialog::selectInstrumentList2);
+      connect(startWithButton,        &QToolButton::clicked, this, &PreferenceDialog::selectStartWith);
 
       defaultStyleButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       partStyleButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
@@ -183,15 +188,15 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       instrumentList2Button->setIcon(*icons[int(Icons::fileOpen_ICON)]);
       startWithButton->setIcon(*icons[int(Icons::fileOpen_ICON)]);
 
-      connect(shortcutList,   SIGNAL(itemActivated(QTreeWidgetItem*, int)), SLOT(defineShortcutClicked()));
-      connect(resetShortcut,  SIGNAL(clicked()), SLOT(resetShortcutClicked()));
-      connect(saveShortcutList,  SIGNAL(clicked()), SLOT(saveShortcutListClicked()));
-      connect(loadShortcutList,  SIGNAL(clicked()), SLOT(loadShortcutListClicked()));
-      connect(clearShortcut,  SIGNAL(clicked()), SLOT(clearShortcutClicked()));
-      connect(defineShortcut, SIGNAL(clicked()), SLOT(defineShortcutClicked()));
-      connect(resetToDefault, SIGNAL(clicked()), SLOT(resetAllValues()));
-      connect(filterShortcuts, SIGNAL(textChanged(const QString&)), SLOT(filterShortcutsTextChanged(const QString &)));
-      connect(printShortcuts, SIGNAL(clicked()), SLOT(printShortcutsClicked()));
+      connect(shortcutList,   &QTreeWidget::itemActivated, this, &PreferenceDialog::defineShortcutClicked);
+      connect(resetShortcut,  &QToolButton::clicked, this, &PreferenceDialog::resetShortcutClicked);
+      connect(saveShortcutList,  &QToolButton::clicked, this, &PreferenceDialog::saveShortcutListClicked);
+      connect(loadShortcutList,  &QToolButton::clicked, this, &PreferenceDialog::loadShortcutListClicked);
+      connect(clearShortcut, &QToolButton::clicked, this, &PreferenceDialog::clearShortcutClicked);
+      connect(defineShortcut, &QToolButton::clicked, this, &PreferenceDialog::defineShortcutClicked);
+      connect(resetToDefault, &QToolButton::clicked, this, &PreferenceDialog::resetAllValues);
+      connect(filterShortcuts, &QLineEdit::textChanged, this, &PreferenceDialog::filterShortcutsTextChanged);
+      connect(printShortcuts, &QToolButton::clicked, this, &PreferenceDialog::printShortcutsClicked);
 
       recordButtons = new QButtonGroup(this);
       recordButtons->setExclusive(false);
@@ -214,15 +219,15 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       recordButtons->addButton(recordEditMode, RMIDI_NOTE_EDIT_MODE);
       recordButtons->addButton(recordRealtimeAdvance, RMIDI_REALTIME_ADVANCE);
 
-      connect(recordButtons,          SIGNAL(buttonClicked(int)), SLOT(recordButtonClicked(int)));
-      connect(midiRemoteControlClear, SIGNAL(clicked()), SLOT(midiRemoteControlClearClicked()));
-      connect(portaudioDriver, SIGNAL(toggled(bool)), SLOT(exclusiveAudioDriver(bool)));
-      connect(pulseaudioDriver, SIGNAL(toggled(bool)), SLOT(exclusiveAudioDriver(bool)));
-      connect(alsaDriver, SIGNAL(toggled(bool)), SLOT(exclusiveAudioDriver(bool)));
-      connect(jackDriver, SIGNAL(toggled(bool)), SLOT(exclusiveAudioDriver(bool)));
-      connect(useJackAudio, SIGNAL(toggled(bool)), SLOT(nonExclusiveJackDriver(bool)));
-      connect(useJackMidi,  SIGNAL(toggled(bool)), SLOT(nonExclusiveJackDriver(bool)));
-      connect(rescanDrivers, SIGNAL(clicked()), this, SLOT(restartAudioEngine()));
+      connect(recordButtons,              QOverload<int>::of(&QButtonGroup::buttonClicked), this, &PreferenceDialog::recordButtonClicked);
+      connect(midiRemoteControlClear,     &QToolButton::clicked, this, &PreferenceDialog::midiRemoteControlClearClicked);
+      connect(portaudioDriver,            &QGroupBox::toggled, this, &PreferenceDialog::exclusiveAudioDriver);
+      connect(pulseaudioDriver,           &QGroupBox::toggled, this, &PreferenceDialog::exclusiveAudioDriver);
+      connect(alsaDriver,                 &QGroupBox::toggled, this, &PreferenceDialog::exclusiveAudioDriver);
+      connect(jackDriver,                 &QGroupBox::toggled, this, &PreferenceDialog::exclusiveAudioDriver);
+      connect(useJackAudio,               &QRadioButton::toggled, this, &PreferenceDialog::nonExclusiveJackDriver);
+      connect(useJackMidi,                &QRadioButton::toggled, this, &PreferenceDialog::nonExclusiveJackDriver);
+      connect(rescanDrivers,              &QToolButton::clicked, this, &PreferenceDialog::restartAudioEngine);
       updateRemote();
 
       advancedWidget = new PreferencesListWidget();
@@ -231,6 +236,7 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       advancedWidget->loadPreferences();
       connect(advancedSearch, &QLineEdit::textChanged, this, &PreferenceDialog::filterAdvancedPreferences);
       connect(resetPreference, &QPushButton::clicked, this, &PreferenceDialog::resetAdvancedPreferenceToDefault);
+      connect(this, &PreferenceDialog::preferencesChanged, mscore->timeline(),  &Timeline::updateTimelineTheme);
 
       MuseScore::restoreGeometry(this);
 #if !defined(Q_OS_MAC) && (!defined(Q_OS_WIN) || defined(FOR_WINSTORE))
@@ -365,6 +371,9 @@ void PreferenceDialog::updateValues(bool useDefaultValues)
       playNotes->setChecked(preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK));
       playChordOnAddNote->setChecked(preferences.getBool(PREF_SCORE_CHORD_PLAYONADDNOTE));
 
+      playHarmony->setChecked(preferences.getBool(PREF_SCORE_HARMONY_PLAY));
+      playHarmonyOnEdit->setChecked(preferences.getBool(PREF_SCORE_HARMONY_PLAY_ONEDIT));
+
       checkUpdateStartup->setChecked(preferences.getBool(PREF_UI_APP_STARTUP_CHECKUPDATE));
 
       navigatorShow->setChecked(preferences.getBool(PREF_UI_APP_STARTUP_SHOWNAVIGATOR));
@@ -394,7 +403,7 @@ void PreferenceDialog::updateValues(bool useDefaultValues)
       alsaFragments->setValue(preferences.getInt(PREF_IO_ALSA_FRAGMENTS));
       drawAntialiased->setChecked(preferences.getBool(PREF_UI_CANVAS_MISC_ANTIALIASEDDRAWING));
       limitScrollArea->setChecked(preferences.getBool(PREF_UI_CANVAS_SCROLL_LIMITSCROLLAREA));
-      switch(preferences.sessionStart()) {
+      switch (preferences.sessionStart()) {
             case SessionStart::EMPTY:  emptySession->setChecked(true); break;
             case SessionStart::LAST:   lastSession->setChecked(true); break;
             case SessionStart::NEW:    newSession->setChecked(true); break;
@@ -409,11 +418,39 @@ void PreferenceDialog::updateValues(bool useDefaultValues)
 
       importLayout->setChecked(preferences.getBool(PREF_IMPORT_MUSICXML_IMPORTLAYOUT));
       importBreaks->setChecked(preferences.getBool(PREF_IMPORT_MUSICXML_IMPORTBREAKS));
-      exportLayout->setChecked(preferences.getBool(PREF_EXPORT_MUSICXML_EXPORTLAYOUT));
-      switch(preferences.musicxmlExportBreaks()) {
-            case MusicxmlExportBreaks::ALL:     exportAllBreaks->setChecked(true); break;
-            case MusicxmlExportBreaks::MANUAL:  exportManualBreaks->setChecked(true); break;
-            case MusicxmlExportBreaks::NO:      exportNoBreaks->setChecked(true); break;
+
+#ifdef AVSOMR
+      useLocalAvsOmr->setChecked(preferences.getBool(PREF_IMPORT_AVSOMR_USELOCAL));
+      Avs::AvsOmrLocal::instance()->isInstalledAsync([this](bool isInstalled) {
+            QString text = QObject::tr("Use local OMR engine");
+            if (isInstalled)
+                  text += " (" + QObject::tr("Installed") + ")";
+            else
+                  text += " (" + QObject::tr("Not installed, needs internet connection for installing") + ")";
+
+            useLocalAvsOmr->setText(text);
+            });
+#else
+      groupBox_omr->setVisible(false);
+#endif
+
+      QString resPref = preferences.getString(PREF_IMPORT_COMPATIBILITY_RESET_ELEMENT_POSITIONS);
+      if (resPref == "No")
+            resetElementPositionsNo->setChecked(true);
+      else if (resPref == "Yes")
+            resetElementPositionsYes->setChecked(true);
+      else // "Ask" or unset (or anything else)
+            resetElementPositionsAlwaysAsk->setChecked(true);
+
+      if (preferences.getBool(PREF_EXPORT_MUSICXML_EXPORTLAYOUT)) {
+            exportAllLayouts->setChecked(true);
+            }
+      else {
+            switch(preferences.musicxmlExportBreaks()) {
+                  case MusicxmlExportBreaks::ALL:     exportAllBreaks->setChecked(true); break;
+                  case MusicxmlExportBreaks::MANUAL:  exportManualBreaks->setChecked(true); break;
+                  case MusicxmlExportBreaks::NO:      exportNoBreaks->setChecked(true); break;
+                  }
             }
 
       rememberLastMidiConnections->setChecked(preferences.getBool(PREF_IO_JACK_REMEMBERLASTCONNECTIONS));
@@ -462,7 +499,7 @@ void PreferenceDialog::updateValues(bool useDefaultValues)
                   portaudioDevice->addItems(devices);
                   portaudioDevice->setCurrentIndex(audio->currentDevice());
 
-                  connect(portaudioApi, SIGNAL(activated(int)), SLOT(portaudioApiActivated(int)));
+                  connect(portaudioApi, QOverload<int>::of(&QComboBox::activated), this, &PreferenceDialog::portaudioApiActivated);
 #ifdef USE_PORTMIDI
                   PortMidiDriver* midiDriver = static_cast<PortMidiDriver*>(audio->mididriver());
                   if (midiDriver) {
@@ -507,14 +544,29 @@ void PreferenceDialog::updateValues(bool useDefaultValues)
 
       defaultPlayDuration->setValue(preferences.getInt(PREF_SCORE_NOTE_DEFAULTPLAYDURATION));
 
-      int shortestNoteIndex = 2;
-      int nn = (preferences.getInt(PREF_IO_MIDI_SHORTESTNOTE) * 16)/MScore::division;
-      switch(nn) {
-            case 16: shortestNoteIndex = 0; break;
-            case 8:  shortestNoteIndex = 1; break;
-            case 4:  shortestNoteIndex = 2; break;
-            case 2:  shortestNoteIndex = 3; break;
-            case 1:  shortestNoteIndex = 4; break;
+      int shortestNoteIndex;
+      int nn = preferences.getInt(PREF_IO_MIDI_SHORTESTNOTE);
+      if (nn == MScore::division)
+            shortestNoteIndex = 0;           // Quarter
+      else if (nn == MScore::division / 2)
+            shortestNoteIndex = 1;  // Eighth
+      else if (nn == MScore::division / 4)
+            shortestNoteIndex = 2;  // etc.
+      else if (nn == MScore::division / 8)
+            shortestNoteIndex = 3;
+      else if (nn == MScore::division / 16)
+            shortestNoteIndex = 4;
+      else if (nn == MScore::division / 32)
+            shortestNoteIndex = 5;
+      else if (nn == MScore::division / 64)
+            shortestNoteIndex = 6;
+      else if (nn == MScore::division / 128)
+            shortestNoteIndex = 7;
+      else if (nn == MScore::division / 256)
+            shortestNoteIndex = 8;
+      else {
+            qDebug("Unknown shortestNote value of %d, defaulting to 16th", nn);
+            shortestNoteIndex = 2;
             }
       shortestNote->setCurrentIndex(shortestNoteIndex);
 
@@ -524,7 +576,7 @@ void PreferenceDialog::updateValues(bool useDefaultValues)
       useImportStyleFile->setChecked(!styleFile.isEmpty());
 
       QList<QByteArray> charsets = QTextCodec::availableCodecs();
-      qSort(charsets.begin(), charsets.end());
+      std::sort(charsets.begin(), charsets.end());
       int idx = 0;
       importCharsetListOve->clear();
       importCharsetListGP->clear();
@@ -707,11 +759,7 @@ void  PreferenceDialog::filterShortcutsTextChanged(const QString &query )
       QTreeWidgetItem *item;
       for(int i = 0; i < shortcutList->topLevelItemCount(); i++) {
           item = shortcutList->topLevelItem(i);
-
-          if(item->text(0).toLower().contains(query.toLower()))
-              item->setHidden(false);
-          else
-              item->setHidden(true);
+          item->setHidden(!(item->text(0).contains(query, Qt::CaseInsensitive) || item->text(1).contains(query, Qt::CaseInsensitive)));
           }
       }
 
@@ -942,12 +990,21 @@ void PreferenceDialog::apply()
       preferences.setPreference(PREF_APP_STARTUP_STARTSCORE, sessionScore->text());
       preferences.setPreference(PREF_EXPORT_AUDIO_SAMPLERATE, exportAudioSampleRate->currentData().toInt());
       preferences.setPreference(PREF_EXPORT_MP3_BITRATE, exportMp3BitRate->currentData().toInt());
-      preferences.setPreference(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, exportLayout->isChecked());
+      preferences.setPreference(PREF_EXPORT_MUSICXML_EXPORTLAYOUT, exportAllLayouts->isChecked());
       preferences.setPreference(PREF_EXPORT_PDF_DPI, exportPdfDpi->value());
       preferences.setPreference(PREF_EXPORT_PNG_RESOLUTION, pngResolution->value());
       preferences.setPreference(PREF_EXPORT_PNG_USETRANSPARENCY, pngTransparent->isChecked());
       preferences.setPreference(PREF_IMPORT_MUSICXML_IMPORTBREAKS, importBreaks->isChecked());
       preferences.setPreference(PREF_IMPORT_MUSICXML_IMPORTLAYOUT, importLayout->isChecked());
+      if (resetElementPositionsAlwaysAsk->isChecked())
+            preferences.setPreference(PREF_IMPORT_COMPATIBILITY_RESET_ELEMENT_POSITIONS, "Ask");
+      else if (resetElementPositionsYes->isChecked())
+            preferences.setPreference(PREF_IMPORT_COMPATIBILITY_RESET_ELEMENT_POSITIONS, "Yes");
+      else if (resetElementPositionsNo->isChecked())
+            preferences.setPreference(PREF_IMPORT_COMPATIBILITY_RESET_ELEMENT_POSITIONS, "No");
+#ifdef AVSOMR
+      preferences.setPreference(PREF_IMPORT_AVSOMR_USELOCAL, useLocalAvsOmr->isChecked());
+#endif
       preferences.setPreference(PREF_IO_MIDI_ADVANCEONRELEASE, advanceOnRelease->isChecked());
       preferences.setPreference(PREF_IO_MIDI_ENABLEINPUT, enableMidiInput->isChecked());
       preferences.setPreference(PREF_IO_MIDI_EXPANDREPEATS, expandRepeats->isChecked());
@@ -958,6 +1015,8 @@ void PreferenceDialog::apply()
       preferences.setPreference(PREF_IO_OSC_PORTNUMBER, oscPort->value());
       preferences.setPreference(PREF_IO_OSC_USEREMOTECONTROL, oscServer->isChecked());
       preferences.setPreference(PREF_SCORE_CHORD_PLAYONADDNOTE, playChordOnAddNote->isChecked());
+      preferences.setPreference(PREF_SCORE_HARMONY_PLAY, playHarmony->isChecked());
+      preferences.setPreference(PREF_SCORE_HARMONY_PLAY_ONEDIT, playHarmonyOnEdit->isChecked());
       preferences.setPreference(PREF_SCORE_NOTE_DEFAULTPLAYDURATION, defaultPlayDuration->value());
       preferences.setPreference(PREF_SCORE_NOTE_PLAYONCLICK, playNotes->isChecked());
       preferences.setPreference(PREF_UI_APP_STARTUP_CHECKUPDATE, checkUpdateStartup->isChecked());
@@ -1049,7 +1108,7 @@ void PreferenceDialog::apply()
       preferences.setPreference(PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS, portMidiOutputLatencyMilliseconds->value());
 #endif
 
-      if (exportAllBreaks->isChecked())
+      if (exportAllLayouts->isChecked() || exportAllBreaks->isChecked())
             preferences.setCustomPreference<MusicxmlExportBreaks>(PREF_EXPORT_MUSICXML_EXPORTBREAKS, MusicxmlExportBreaks::ALL);
       else if (exportManualBreaks->isChecked())
             preferences.setCustomPreference<MusicxmlExportBreaks>(PREF_EXPORT_MUSICXML_EXPORTBREAKS, MusicxmlExportBreaks::MANUAL);
@@ -1100,13 +1159,22 @@ void PreferenceDialog::apply()
       else
             preferences.setPreference(PREF_IMPORT_STYLE_STYLEFILE, "");
 
-      int ticks = MScore::division/4;
-      switch(shortestNote->currentIndex()) {
-            case 0: ticks = MScore::division;    break;
-            case 1: ticks = MScore::division/2;  break;
-            case 2: ticks = MScore::division/4;  break;
-            case 3: ticks = MScore::division/8;  break;
-            case 4: ticks = MScore::division/16; break;
+      int ticks = MScore::division / 4;
+      switch (shortestNote->currentIndex()) {
+            case 0: ticks = MScore::division;       break;
+            case 1: ticks = MScore::division / 2;   break;
+            case 2: ticks = MScore::division / 4;   break;
+            case 3: ticks = MScore::division / 8;   break;
+            case 4: ticks = MScore::division / 16;  break;
+            case 5: ticks = MScore::division / 32;  break;
+            case 6: ticks = MScore::division / 64;  break;
+            case 7: ticks = MScore::division / 128; break;
+            case 8: ticks = MScore::division / 256; break;
+            default: {
+                  qDebug("Unknown index for shortestNote: %d, defaulting to 16th",
+                         shortestNote->currentIndex());
+                  ticks = MScore::division / 4;
+                  }
             }
       preferences.setPreference(PREF_IO_MIDI_SHORTESTNOTE, ticks);
 
@@ -1136,9 +1204,14 @@ void PreferenceDialog::apply()
       mscore->changeWorkspace(WorkspacesManager::currentWorkspace());
       emit mscore->workspacesChanged();
       
-      emit preferencesChanged();
+      emit preferencesChangedWithBool(false);
       preferences.save();
       mscore->startAutoSave();
+
+      //Smooth panning
+      SmoothPanSettings* svPanSettings = mscore->currentScoreView()->panSettings();
+      svPanSettings->loadFromPreferences();
+      mscore->currentScoreView()->setControlCursorVisible(preferences.getBool(PREF_PAN_CURSOR_VISIBLE));
       }
 
 //---------------------------------------------------------

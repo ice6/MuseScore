@@ -20,6 +20,7 @@
 #include "scoreaccessibility.h"
 #include "libmscore/score.h"
 #include "libmscore/keysig.h"
+#include "libmscore/timesig.h"
 #include "libmscore/segment.h"
 #include "libmscore/utils.h"
 #include "libmscore/text.h"
@@ -51,7 +52,7 @@ bool ScoreView::event(QEvent* event)
                         return true;
                         }
 
-                  if (editMode() || editData.grips) {
+                  if (hasEditGrips() || editMode()) {
                         if (ke->key() == Qt::Key_Tab)
                               editData.element->nextGrip(editData);
                         else
@@ -69,13 +70,15 @@ bool ScoreView::event(QEvent* event)
                         case Qt::Key_Right:
                         case Qt::Key_Up:
                         case Qt::Key_Down: {
-                              if (!editData.grips)
+                              if (!hasEditGrips())
                                     break;
                               const auto m = ke->modifiers();
                               // KeypadModifier is necessary on MacOS as arrow keys seem to always
                               // trigger that modifier there. However it would probably be appropriate
                               // to allow it on other systems too.
-                              constexpr auto allowedModifiers = Qt::ShiftModifier | Qt::KeypadModifier;
+                              const auto allowedModifiers = (editData.curGrip == Grip::NO_GRIP)
+                                 ? (Qt::KeypadModifier | Qt::ShiftModifier)
+                                 : (Qt::KeypadModifier | Qt::ShiftModifier | Qt::ControlModifier);
                               if ((m & ~allowedModifiers) == 0) {
                                     ke->accept();
                                     return true;
@@ -156,7 +159,7 @@ void ScoreView::wheelEvent(QWheelEvent* event)
             nReal = static_cast<qreal>(stepsScrolled.y()) / 120;
             }
 
-      n = (int) nReal;
+      n = static_cast<int>(nReal);
 
       //this functionality seems currently blocked by the context menu
       if (event->buttons() & Qt::RightButton) {
@@ -382,6 +385,18 @@ void ScoreView::mousePressEventNormal(QMouseEvent* ev)
                               }
                         }
                   }
+            else if (e->isTimeSig() && !toTimeSig(e)->isLocal() && (keyState != Qt::ControlModifier) && st == SelectType::SINGLE) {
+                  // special case: select for all staves except when TimeSig is local.
+                  Segment* s = toTimeSig(e)->segment();
+                  bool first = true;
+                  for (int staffIdx = 0; staffIdx < _score->nstaves(); ++staffIdx) {
+                        Element* ee = s->element(staffIdx * VOICES);
+                        if (ee) {
+                              ee->score()->select(ee, first ? SelectType::SINGLE : SelectType::ADD);
+                              first = false;
+                              }
+                        }
+                  }
             else {
                   if (st == SelectType::ADD) {
                         // e is the top element in stacking order,
@@ -411,11 +426,11 @@ void ScoreView::mousePressEventNormal(QMouseEvent* ev)
                               }
                         }
                   }
-            if (e && e->isNote()) {
-                  e->score()->updateCapo();
-                  mscore->play(e);
-                  }
             if (e) {
+                  if (e->isNote() || e->isHarmony()) {
+                        e->score()->updateCapo();
+                        mscore->play(e);
+                        }
                   _score = e->score();
                   _score->setUpdateAll();
                   }
@@ -471,7 +486,7 @@ void ScoreView::mousePressEvent(QMouseEvent* ev)
       editData.modifiers = qApp->keyboardModifiers();
 
       bool gripFound = false;
-      if (editData.element && editData.grips && ev->button() == Qt::LeftButton) {
+      if (hasEditGrips() && ev->button() == Qt::LeftButton) {
             switch (state) {
                   case ViewState::NORMAL:
                   case ViewState::EDIT:
@@ -609,7 +624,6 @@ void ScoreView::adjustCursorForTextEditing(QMouseEvent* mouseEvent)
 
 void ScoreView::mouseMoveEvent(QMouseEvent* me)
       {
-      modifySelection = false;
       adjustCursorForTextEditing(me);
 
       if (state != ViewState::NOTE_ENTRY && editData.buttons == Qt::NoButton)
@@ -641,6 +655,7 @@ void ScoreView::mouseMoveEvent(QMouseEvent* me)
                               }
                         }
                   changeState(ViewState::DRAG);
+                  modifySelection = false;
                   break;
 
             case ViewState::NOTE_ENTRY: {
@@ -727,8 +742,16 @@ void ScoreView::mouseDoubleClickEvent(QMouseEvent* mouseEvent)
 
       Element* clickedElement = elementNear(toLogical(mouseEvent->pos()));
 
-      if (!(clickedElement && clickedElement->isEditable()))
+      if (!clickedElement)
             return;
+
+      if (!clickedElement->isEditable()) {
+            if (clickedElement->isInstrumentName()) // double-click an instrument name to open the edit staff/part properties menu
+                  elementPropertyAction("staff-props", clickedElement);
+            else if (clickedElement->isText() && (toText(clickedElement)->tid() == Tid::FOOTER || toText(clickedElement)->tid() == Tid::HEADER)) // double-click an instrument name to open the edit staff/part properties menu
+                  elementPropertyAction("style-header-footer", clickedElement);
+            return;
+            }
 
       startEditMode(clickedElement);
 
@@ -774,14 +797,14 @@ void ScoreView::keyPressEvent(QKeyEvent* ev)
 
       if (state != ViewState::EDIT) {
             const bool shiftModifier = ev->modifiers() & Qt::ShiftModifier;
-            if (editData.grips && !(shiftModifier && ev->key() == Qt::Key_Backtab)) {
+            if (hasEditGrips() && !(shiftModifier && ev->key() == Qt::Key_Backtab)) {
                   switch (ev->key()) {
                         case Qt::Key_Left:
                         case Qt::Key_Right:
                         case Qt::Key_Up:
                         case Qt::Key_Down:
                               // Move focus to default grip if arrow keys are pressed and no grip is focused
-                              if (editData.grips && editData.curGrip == Grip::NO_GRIP)
+                              if (editData.curGrip == Grip::NO_GRIP)
                                     editData.curGrip = editData.element->defaultGrip();
                               break;
                         default:
@@ -809,6 +832,10 @@ void ScoreView::keyPressEvent(QKeyEvent* ev)
                   harmonyBeatsTab(true, editData.modifiers & Qt::ShiftModifier);
                   return;
                   }
+            else if (editData.key == Qt::Key_Return) {
+                  changeState(ViewState::NORMAL);
+                  return;
+                  }
             }
       else if (editData.element->isFiguredBass()) {
             if (editData.key == Qt::Key_Space && !(editData.modifiers & CONTROL_MODIFIER)) {
@@ -821,7 +848,7 @@ void ScoreView::keyPressEvent(QKeyEvent* ev)
                   return;
             }
 
-      ScoreViewCmdContext cc(this, editData.grips);
+      ScoreViewCmdContext cc(this, hasEditGrips());
       const bool textEdit = textEditMode();
 
 #ifdef Q_OS_WIN // Japenese IME on Windows needs to know when Ctrl/Alt/Shift/CapsLock is pressed while in predit
@@ -1123,6 +1150,7 @@ void ScoreView::changeState(ViewState s)
                   if (state == ViewState::EDIT) {
                         _blockShowEdit = true;  // otherwise may jump on clicking outside the text element being edited
                         endEdit();
+                        editData.element = nullptr; // editData.element will be determined by selection state in normal mode
                         _blockShowEdit = false;
                         }
                   setCursor(QCursor(Qt::ArrowCursor));

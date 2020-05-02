@@ -467,6 +467,9 @@ static void applyDrop(Score* score, ScoreView* viewer, Element* target, Element*
             dropData.dropElement->styleChanged();   // update to local style
 
             Element* el = target->drop(dropData);
+            if (el && el->isInstrumentChange()) {
+                  mscore->currentScoreView()->selectInstrument(toInstrumentChange(el));
+                  }
             if (el && !viewer->noteEntryMode())
                   score->select(el, SelectType::SINGLE, 0);
             dropData.dropElement = 0;
@@ -550,7 +553,7 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
                   score->cmdToggleLayoutBreak(breakElement->layoutBreakType());
                   }
             else if (element->isSlur() && addSingle) {
-                  viewer->addSlur(toSlur(element));
+                  viewer->cmdAddSlur(toSlur(element));
                   }
             else if (element->isSLine() && !element->isGlissando() && addSingle) {
                   Segment* startSegment = cr1->segment();
@@ -660,7 +663,7 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
                                                 Interval v = staff->part()->instrument(tick1)->transpose();
                                                 if (!v.isZero()) {
                                                       Key k = okeysig->key();
-                                                      okeysig->setKey(transposeKey(k, v));
+                                                      okeysig->setKey(transposeKey(k, v, okeysig->part()->preferSharpFlat()));
                                                       }
                                                 }
                                           oelement = okeysig;
@@ -702,13 +705,15 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
                         }
                   }
             else if (element->isSlur()) {
-                  viewer->addSlur(toSlur(element));
+                  viewer->cmdAddSlur(toSlur(element));
                   }
             else if (element->isSLine() && element->type() != ElementType::GLISSANDO) {
                   Segment* startSegment = sel.startSegment();
                   Segment* endSegment = sel.endSegment();
-                  int endStaff = sel.staffEnd();
-                  for (int i = sel.staffStart(); i < endStaff; ++i) {
+                  bool firstStaffOnly = element->isVolta() && !(modifiers & Qt::ControlModifier);
+                  int startStaff = firstStaffOnly ? 0 : sel.staffStart();
+                  int endStaff   = firstStaffOnly ? 1 : sel.staffEnd();
+                  for (int i = startStaff; i < endStaff; ++i) {
                         Spanner* spanner = static_cast<Spanner*>(element->clone());
                         spanner->setScore(score);
                         spanner->styleChanged();
@@ -720,6 +725,7 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
                   int track2 = sel.staffEnd() * VOICES;
                   Segment* startSegment = sel.startSegment();
                   Segment* endSegment = sel.endSegment(); //keep it, it could change during the loop
+
                   for (Segment* s = startSegment; s && s != endSegment; s = s->next1()) {
                         for (int track = track1; track < track2; ++track) {
                               Element* e = s->element(track);
@@ -727,8 +733,11 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
                                     continue;
                               if (e->isChord()) {
                                     Chord* chord = toChord(e);
-                                    for (Note* n : chord->notes())
+                                    for (Note* n : chord->notes()) {
                                           applyDrop(score, viewer, n, element, modifiers);
+                                          if (!(element->isAccidental() || element->isNoteHead())) // only these need to apply to every note
+                                              break;
+                                        }
                                     }
                               else {
                                     // do not apply articulation to barline in a range selection
@@ -736,6 +745,8 @@ bool Palette::applyPaletteElement(Element* element, Qt::KeyboardModifiers modifi
                                           applyDrop(score, viewer, e, element, modifiers);
                                     }
                               }
+                        if (!element->placeMultiple())
+                              break;
                         }
                   }
             }
@@ -804,19 +815,35 @@ void PaletteScrollArea::keyPressEvent(QKeyEvent* event)
       }
 
 //---------------------------------------------------------
+//   mouseDoubleClickEvent
+//---------------------------------------------------------
+
+void Palette::mouseDoubleClickEvent(QMouseEvent* event)
+      {
+      if (_useDoubleClickToActivate)
+            applyElementAtPosition(event->pos(), event->modifiers());
+      }
+
+//---------------------------------------------------------
 //   mouseReleaseEvent
 //---------------------------------------------------------
 
-void Palette::mouseReleaseEvent(QMouseEvent *event)
+void Palette::mouseReleaseEvent(QMouseEvent* event)
       {
       pressedIndex = -1;
 
       update();
 
+      if (!_useDoubleClickToActivate)
+            applyElementAtPosition(event->pos(), event->modifiers());
+      }
+
+void Palette::applyElementAtPosition(QPoint pos, Qt::KeyboardModifiers modifiers)
+      {
       if (_disableElementsApply)
             return;
 
-      int index = idx(event->pos());
+      const int index = idx(pos);
 
       if (index == -1)
             return;
@@ -831,7 +858,7 @@ void Palette::mouseReleaseEvent(QMouseEvent *event)
       if (!cell)
             return;
 
-      applyPaletteElement(cell->element.get(), event->modifiers());
+      applyPaletteElement(cell->element.get(), modifiers);
       }
 
 //---------------------------------------------------------

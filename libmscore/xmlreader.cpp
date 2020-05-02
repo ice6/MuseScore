@@ -11,17 +11,12 @@
 //=============================================================================
 
 #include "xml.h"
-#include "layoutbreak.h"
 #include "measure.h"
 #include "score.h"
 #include "spanner.h"
 #include "staff.h"
 #include "beam.h"
 #include "tuplet.h"
-#include "sym.h"
-#include "note.h"
-#include "barline.h"
-#include "style.h"
 
 namespace Ms {
 
@@ -520,6 +515,18 @@ Tid XmlReader::addUserTextStyle(const QString& name)
             id = Tid::USER5;
       else if (userTextStyles.size() == 5)
             id = Tid::USER6;
+      else if (userTextStyles.size() == 6)
+            id = Tid::USER7;
+      else if (userTextStyles.size() == 7)
+            id = Tid::USER8;
+      else if (userTextStyles.size() == 8)
+            id = Tid::USER9;
+      else if (userTextStyles.size() == 9)
+            id = Tid::USER10;
+      else if (userTextStyles.size() == 10)
+            id = Tid::USER11;
+      else if (userTextStyles.size() == 11)
+            id = Tid::USER12;
       else
             qDebug("too many user defined textstyles");
       if (id != Tid::TEXT_STYLES)
@@ -538,27 +545,6 @@ Tid XmlReader::lookupUserTextStyle(const QString& name)
                   return i.ss;
             }
       return Tid::TEXT_STYLES;       // not found
-      }
-
-//---------------------------------------------------------
-//   performReadAhead
-//    If f is called, the device will be non-sequential and
-//    open. Reading position equals to the current value of
-//    characterOffset(), but it is possible to seek for any
-//    other position inside f.
-//---------------------------------------------------------
-
-void XmlReader::performReadAhead(std::function<void(QIODevice&)> f)
-      {
-      if (!_readAheadDevice || _readAheadDevice->isSequential())
-            return;
-      if (!_readAheadDevice->isOpen())
-            _readAheadDevice->open(QIODevice::ReadOnly);
-
-      const auto pos = _readAheadDevice->pos();
-      _readAheadDevice->seek(characterOffset());
-      f(*_readAheadDevice);
-      _readAheadDevice->seek(pos);
       }
 
 //---------------------------------------------------------
@@ -631,8 +617,8 @@ void XmlReader::reconnectBrokenConnectors()
             return;
       qDebug("Reconnecting broken connectors (%d nodes)", int(_connectors.size()));
       QList<QPair<int, QPair<ConnectorInfoReader*, ConnectorInfoReader*>>> brokenPairs;
-      for (int i = 1; i < int(_connectors.size()); ++i) {
-            for (int j = 0; j < i; ++j) {
+      for (size_t i = 1; i < _connectors.size(); ++i) {
+            for (size_t j = 0; j < i; ++j) {
                   ConnectorInfoReader* c1 = _connectors[i].get();
                   ConnectorInfoReader* c2 = _connectors[j].get();
                   int d = c1->connectionDistance(*c2);

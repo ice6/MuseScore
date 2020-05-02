@@ -19,7 +19,7 @@
 */
 
 #include "mscore.h"
-#include "velo.h"
+#include "changeMap.h"
 #include "pitch.h"
 #include "cleflist.h"
 #include "keylist.h"
@@ -42,6 +42,7 @@ class Clef;
 class TimeSig;
 class Ottava;
 class BracketItem;
+class Note;
 
 enum class Key;
 
@@ -93,11 +94,13 @@ class Staff final : public ScoreElement {
       QMap<int,int> _capoList;
       bool _playbackVoice[VOICES] { true, true, true, true };
 
-      VeloList _velocities;         ///< cached value
+      ChangeMap _velocities;         ///< cached value
       PitchList _pitchOffsets;      ///< cached value
 
       void fillBrackets(int);
       void cleanBrackets();
+
+      qreal mag(const StaffType*) const;
 
    public:
       Staff(Score* score = 0);
@@ -105,7 +108,7 @@ class Staff final : public ScoreElement {
       void initFromStaffType(const StaffType* staffType);
       void init(const Staff*);
 
-      virtual ElementType type() const override { return ElementType::STAFF; }
+      ElementType type() const override { return ElementType::STAFF; }
 
       bool isTop() const;
       QString partName() const;
@@ -184,6 +187,10 @@ class Staff final : public ScoreElement {
       qreal height() const;
 
       int channel(const Fraction&, int voice) const;
+
+      QList<Note*> getNotes() const;
+      void addChord(QList<Note*>& list, Chord* chord, int voice) const;
+
       void clearChannelList(int voice)                               { _channelList[voice].clear(); }
       void insertIntoChannelList(int voice, const Fraction& tick, int channelId) { _channelList[voice].insert(tick.ticks(), channelId); }
 
@@ -198,6 +205,7 @@ class Staff final : public ScoreElement {
       //==== staff type helper function
       const StaffType* staffType(const Fraction&) const;
       const StaffType* constStaffType(const Fraction&) const;
+      const StaffType* staffTypeForElement(const Element*) const;
       StaffType* staffType(const Fraction&);
       StaffType* setStaffType(const Fraction&, const StaffType&);
       void removeStaffType(const Fraction&);
@@ -215,15 +223,13 @@ class Staff final : public ScoreElement {
       int middleLine(const Fraction&) const;
       int bottomLine(const Fraction&) const;
 
-      qreal userMag(const Fraction&) const;
-      void setUserMag(const Fraction&, qreal m);
       qreal mag(const Fraction&) const;
-      bool small(const Fraction&) const;
-      void setSmall(const Fraction&, bool val);
+      qreal mag(const Element*) const;
       qreal spatium(const Fraction&) const;
+      qreal spatium(const Element*) const;
       //===========
 
-      VeloList& velocities()           { return _velocities;     }
+      ChangeMap& velocities()           { return _velocities;     }
       PitchList& pitchOffsets()        { return _pitchOffsets;   }
 
       int pitchOffset(const Fraction& tick) { return _pitchOffsets.pitchOffset(tick.ticks());   }
@@ -245,9 +251,9 @@ class Staff final : public ScoreElement {
       void undoSetColor(const QColor& val);
       void insertTime(const Fraction&, const Fraction& len);
 
-      virtual QVariant getProperty(Pid) const override;
-      virtual bool setProperty(Pid, const QVariant&) override;
-      virtual QVariant propertyDefault(Pid) const override;
+      QVariant getProperty(Pid) const override;
+      bool setProperty(Pid, const QVariant&) override;
+      QVariant propertyDefault(Pid) const override;
 
       BracketType innerBracket() const;
 

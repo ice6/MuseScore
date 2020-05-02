@@ -26,6 +26,7 @@
 #include <QMenu>
 #include <QToolButton>
 #include "shortcut.h"
+#include "globals.h"
 
 //---------------------------------------------------------
 //   ActionEventObserver
@@ -44,7 +45,7 @@ QPair<QString, QString> ActionEventObserver::extractActionData(QObject* watched)
       QPair<QString, QString> result;
 
       QString actionCategory;
-      QString actionKey;
+      QString actionName;
 
       if (qobject_cast<QMenu*>(watched)) {
             QMenu* watchedMenu = qobject_cast<QMenu*>(watched);
@@ -52,7 +53,13 @@ QPair<QString, QString> ActionEventObserver::extractActionData(QObject* watched)
             QAction* activeAction = watchedMenu->activeAction();
 
             if (activeAction) {
-                  actionKey = activeAction->data().toString();
+                  if (activeAction->data().type() == QVariant::String)
+                        actionName = activeAction->data().toString();
+                  else if (activeAction->data().type() == QVariant::Map) {
+                        QVariantMap actionDataMap = activeAction->data().toMap();
+                        actionName = actionDataMap.value("actionName").toString();
+                  }
+
                   actionCategory = QStringLiteral("menu item click");
                   }
             }
@@ -62,13 +69,13 @@ QPair<QString, QString> ActionEventObserver::extractActionData(QObject* watched)
             QAction* activeAction = watchedButton->defaultAction();
 
             if (activeAction) {
-                  actionKey = activeAction->data().toString();
+                  actionName = activeAction->data().toString();
                   actionCategory = QStringLiteral("button clicked");
                   }
             }
 
       result.first = actionCategory;
-      result.second = actionKey;
+      result.second = actionName;
 
       return result;
       }
@@ -79,20 +86,35 @@ QPair<QString, QString> ActionEventObserver::extractActionData(QObject* watched)
 
 bool ActionEventObserver::eventFilter(QObject *watched, QEvent *event)
       {
-      if (event->type() == QEvent::MouseButtonRelease) {
+      //if Shortcuts and Menus data IS the enabled telemetry data
+      if (Ms::enabledTelemetryDataTypes & Ms::TelemetryDataCollectionType::COLLECT_SHORTCUT_AND_MENU_DATA) {
+            if (event->type() == QEvent::MouseButtonRelease) {
+                  QPair<QString, QString> actionData = extractActionData(watched);
+                  telemetryService()->sendEvent(actionData.first, actionData.second);
+                  }
+            else if (event->type() == QEvent::Shortcut) {
+                  QShortcutEvent* shortCutEvent = static_cast<QShortcutEvent*>(event);
+                  Ms::Shortcut* shortcut = Ms::Shortcut::getShortcutByKeySequence(shortCutEvent->key(), m_scoreState);
 
-            QPair<QString, QString> actionData = extractActionData(watched);
+                  if (!shortcut)
+                        return false;
 
-            telemetryService()->sendEvent(actionData.first, actionData.second);
-
+                  telemetryService()->sendEvent("shortcut", shortcut->key());
+                  }
             }
-      else if (event->type() == QEvent::Shortcut) {
-            QShortcutEvent* shortCutEvent = static_cast<QShortcutEvent*>(event);
-
-            Ms::Shortcut* shortcut = Ms::Shortcut::getShortcutByKeySequence(shortCutEvent->key());
-
-            telemetryService()->sendEvent("shortcut", shortcut->key());
-            }
-
       return false;
+      }
+
+///---------------------------------------------------------
+/// @name  setScoreState
+///
+/// @brief Geting the current state of a score through the connection.
+///        Because single shortcut can be used in different actions regarding to the current score state.
+///
+/// @see ActionEventObserver::eventFilter
+///---------------------------------------------------------
+
+void ActionEventObserver::setScoreState(const Ms::ScoreState state)
+      {
+      m_scoreState = state;
       }

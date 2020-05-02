@@ -62,10 +62,15 @@ Beam::Beam(Score* s)
       _direction       = Direction::AUTO;
       _up              = true;
       _distribute      = false;
+      _noSlope         = false;
       _userModified[0] = false;
       _userModified[1] = false;
       _grow1           = 1.0;
       _grow2           = 1.0;
+      _beamDist        = 0.;
+      _id              = 0;
+      minMove          = 0;
+      maxMove          = 0;
       _isGrace         = false;
       _cross           = false;
       }
@@ -88,6 +93,7 @@ Beam::Beam(const Beam& b)
       _userModified[1] = b._userModified[1];
       _grow1           = b._grow1;
       _grow2           = b._grow2;
+      _beamDist        = b._beamDist;
       for (const BeamFragment* f : b.fragments)
             fragments.append(new BeamFragment(*f));
       minMove          = b.minMove;
@@ -390,7 +396,7 @@ void Beam::layout1()
                         Measure* m = c1->measure();
                         if (c1->stemDirection() != Direction::AUTO)
                               _up = c1->stemDirection() == Direction::UP;
-                        else if (m->hasVoices(c1->staffIdx()))
+                        else if (m->hasVoices(c1->staffIdx(), tick(), ticks()))
                               _up = !(c1->voice() % 2);
                         else if (!twoBeamedNotes()) {
                               // highest or lowest note determines stem direction
@@ -477,7 +483,7 @@ void Beam::layoutGraceNotes()
                   ChordRest* cr = _elements[0];
 
                   Measure* m = cr->measure();
-                  if (m->hasVoices(cr->staffIdx()))
+                  if (m->hasVoices(cr->staffIdx(), tick(), ticks()))
                         _up = !(cr->voice() % 2);
                   else
                         _up = true;
@@ -1544,7 +1550,7 @@ void Beam::layout2(std::vector<ChordRest*>crl, SpannerSegmentType, int frag)
             _beamDist = score()->styleP(Sid::beamWidth) * (1 + score()->styleD(Sid::beamDistance));
 
       _beamDist *= mag();
-      _beamDist *= c1->staff()->mag(c1->tick());
+      _beamDist *= c1->staff()->mag(c1);
       size_t n = crl.size();
 
       const StaffType* tab = 0;
@@ -1780,7 +1786,7 @@ void Beam::layout2(std::vector<ChordRest*>crl, SpannerSegmentType, int frag)
                               crBase[i1] = bl;
                         }
 
-                  qreal stemWidth  = score()->styleP(Sid::stemWidth);
+                  qreal stemWidth  = (cr1->isChord() && toChord(cr1)->stem()) ? toChord(cr1)->stem()->lineWidthMag() : 0.0;
                   qreal x2         = cr1->stemPosX() + cr1->pageX() - _pagePos.x();
                   qreal x3;
 
@@ -1797,7 +1803,7 @@ void Beam::layout2(std::vector<ChordRest*>crl, SpannerSegmentType, int frag)
                               if (cr1->up())
                                     x2 -= stemWidth;
                               if (!chordRest2->up())
-                                    x3 += stemWidth;
+                                    x3 += (chordRest2->isChord() && toChord(chordRest2)->stem()) ? toChord(chordRest2)->stem()->lineWidthMag() : 0.0;
                               }
                         }
                   else {
@@ -1879,7 +1885,7 @@ void Beam::layout2(std::vector<ChordRest*>crl, SpannerSegmentType, int frag)
                               else {
                                     // determine if this is a logical group end as per 2) above
 
-                                    Fraction baseTick = tuplet ? tuplet->tick() : cr1->measure()->tick();;
+                                    Fraction baseTick = tuplet ? tuplet->tick() : cr1->measure()->tick();
                                     Fraction tickNext = nextCR->tick() - baseTick;
                                     if (tuplet) {
                                           // for tuplets with odd ratios, apply ratio
@@ -1975,7 +1981,7 @@ void Beam::layout2(std::vector<ChordRest*>crl, SpannerSegmentType, int frag)
             Stem* stem = c->stem();
             if (stem) {
                   bool useTablature = staff() && staff()->isTabStaff(cr->tick());
-                  qreal sw2  = useTablature ? 0.f : stem->lineWidth() * .5;
+                  qreal sw2  = useTablature ? 0.f : stem->lineWidthMag() * .5;
                   if (c->up())
                         sw2 = -sw2;
                   stem->rxpos() = c->stemPosX() + sw2;
@@ -2122,6 +2128,7 @@ void Beam::read(XmlReader& e)
 class BeamEditData : public ElementEditData {
    public:
       int editFragment;
+      virtual EditDataType type() override      { return EditDataType::BeamEditData; }
       };
 
 //---------------------------------------------------------
@@ -2232,23 +2239,7 @@ void Beam::reset()
 
 void Beam::startEdit(EditData& ed)
       {
-      BeamEditData* bed = new BeamEditData();
-      bed->e    = this;
-      bed->editFragment = 0;
-      ed.addData(bed);
-
-      QPointF pt(ed.startMove - pagePos());
-      qreal ydiff = 100000000.0;
-      int idx = (_direction == Direction::AUTO || _direction == Direction::DOWN) ? 0 : 1;
-      int i = 0;
-      for (BeamFragment* f : fragments) {
-            qreal d = fabs(f->py1[idx] - pt.y());
-            if (d < ydiff) {
-                  ydiff = d;
-                  bed->editFragment = i;
-                  }
-            ++i;
-            }
+      initBeamEditData(ed);
       }
 
 //---------------------------------------------------------
@@ -2503,6 +2494,19 @@ Fraction Beam::rtick() const
       }
 
 //---------------------------------------------------------
+//   ticks
+//    calculate the ticks of all chords and rests connected by the beam
+//---------------------------------------------------------
+
+Fraction Beam::ticks() const
+      {
+      Fraction ticks = Fraction(0, 1);
+      for (ChordRest* cr : _elements)
+            ticks += cr->actualTicks();
+      return ticks;
+      }
+
+//---------------------------------------------------------
 //   iconType
 //---------------------------------------------------------
 
@@ -2525,5 +2529,75 @@ IconType Beam::iconType(Mode mode)
                   break;
             }
       return IconType::NONE;
+}
+
+//---------------------------------------------------------
+//   drag
+//---------------------------------------------------------
+
+QRectF Beam::drag(EditData& ed)
+      {
+      int idx  = (_direction == Direction::AUTO || _direction == Direction::DOWN) ? 0 : 1;
+      qreal dy = ed.pos.y() - ed.lastPos.y();
+      BeamEditData* bed = static_cast<BeamEditData*>(ed.getData(this));
+      BeamFragment* f = fragments[bed->editFragment];
+
+      qreal y1 = f->py1[idx];
+      qreal y2 = f->py2[idx];
+
+      y1 += dy;
+      y2 += dy;
+
+      qreal _spatium = spatium();
+      // Because of the logic in Beam::setProperty(),
+      // changing Pid::BEAM_POS only has an effect if Pid::USER_MODIFIED is true.
+      undoChangeProperty(Pid::USER_MODIFIED, true);
+      undoChangeProperty(Pid::BEAM_POS, QPointF(y1 / _spatium, y2 / _spatium));
+      undoChangeProperty(Pid::GENERATED, false);
+
+      triggerLayout();
+
+      return canvasBoundingRect();
       }
+
+//---------------------------------------------------------
+//   isMovable
+//---------------------------------------------------------
+bool Beam::isMovable() const
+      {
+      return true;
+      }
+
+//---------------------------------------------------------
+//   initBeamEditData
+//---------------------------------------------------------
+void Beam::initBeamEditData(EditData& ed)
+      {
+      BeamEditData* bed = new BeamEditData();
+      bed->e    = this;
+      bed->editFragment = 0;
+      ed.addData(bed);
+
+      QPointF pt(ed.normalizedStartMove - pagePos());
+      qreal ydiff = 100000000.0;
+      int idx = (_direction == Direction::AUTO || _direction == Direction::DOWN) ? 0 : 1;
+      int i = 0;
+      for (BeamFragment* f : fragments) {
+            qreal d = fabs(f->py1[idx] - pt.y());
+            if (d < ydiff) {
+                  ydiff = d;
+                  bed->editFragment = i;
+                  }
+            ++i;
+            }
+      }
+
+//---------------------------------------------------------
+//   startDrag
+//---------------------------------------------------------
+void Beam::startDrag(EditData& editData)
+      {
+      initBeamEditData(editData);
+      }
+
 }

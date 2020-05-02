@@ -23,10 +23,8 @@ namespace PluginAPI {
 
 void Element::setOffsetX(qreal offX)
       {
-      offX *= element()->spatium();
-      QPointF off(element()->offset());
-      off.rx() += offX;
-      set(Ms::Pid::OFFSET, off);
+      const qreal offY = element()->offset().y() / element()->spatium();
+      set(Ms::Pid::OFFSET, QPointF(offX, offY));
       }
 
 //---------------------------------------------------------
@@ -35,10 +33,8 @@ void Element::setOffsetX(qreal offX)
 
 void Element::setOffsetY(qreal offY)
       {
-      offY *= element()->spatium();
-      QPointF off(element()->offset());
-      off.ry() += offY;
-      set(Ms::Pid::OFFSET, off);
+      const qreal offX = element()->offset().x() / element()->spatium();
+      set(Ms::Pid::OFFSET, QPointF(offX, offY));
       }
 
 //---------------------------------------------------------
@@ -224,6 +220,15 @@ void Chord::addInternal(Ms::Chord* chord, Ms::Element* s)
       }
 
 //---------------------------------------------------------
+//   Page::pagenumber
+//---------------------------------------------------------
+
+int Page::pagenumber() const
+      {
+      return page()->no();
+      }
+
+//---------------------------------------------------------
 //   Chord::remove
 //---------------------------------------------------------
 
@@ -250,6 +255,9 @@ void Chord::remove(Ms::PluginAPI::Element* wrapped)
 
 Element* wrap(Ms::Element* e, Ownership own)
       {
+      if (!e)
+            return nullptr;
+
       using Ms::ElementType;
       switch(e->type()) {
             case ElementType::NOTE:
@@ -260,6 +268,8 @@ Element* wrap(Ms::Element* e, Ownership own)
                   return wrap<Segment>(toSegment(e), own);
             case ElementType::MEASURE:
                   return wrap<Measure>(toMeasure(e), own);
+            case ElementType::PAGE:
+                  return wrap<Page>(toPage(e), own);
             default:
                   break;
             }

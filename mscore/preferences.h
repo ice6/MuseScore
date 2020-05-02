@@ -29,6 +29,7 @@
  *   using getString(), getInt(), etc., and changed using setPreference()
  */
 
+#include <functional>
 #include "globals.h"
 #include "global/settings/types/preferencekeys.h"
 
@@ -141,6 +142,8 @@ class EnumPreference: public Preference {
 class Preferences {
    public:
       typedef QHash<QString, Preference*> prefs_map_t;
+      using OnSetListener = std::function<void(const QString& key, const QVariant& value)>;
+      using ListenerID = uint32_t;
 
    private:
 
@@ -174,6 +177,8 @@ class Preferences {
       QMap<QString, QVariant> getDefaultLocalPreferences();
       bool useLocalPrefs = false;
 
+      QMap<ListenerID, OnSetListener> _onSetListeners;
+
    public:
       Preferences();
       ~Preferences();
@@ -195,6 +200,10 @@ class Preferences {
       // general setters
       void setToDefaultValue(const QString key);
       void setPreference(const QString key, QVariant value);
+
+      // set listeners
+      ListenerID addOnSetListener(const OnSetListener& l);
+      void removeOnSetListener(const ListenerID& id);
 
       // A temporary preference is stored "in memory" only and not written to file.
       // If there is both a "normal" preference and a temporary preference with the same
@@ -233,20 +242,51 @@ extern Preferences preferences;
 
 // Stream operators for enum classes
 // enum classes don't play well with QSettings without custom serialization
-template<typename T, typename std::enable_if<std::is_enum<T>::value>::type* = nullptr>
-inline QDataStream &operator<<(QDataStream &out, const T &val)
+inline QDataStream&
+operator<<(QDataStream &out, const Ms::MuseScoreStyleType &val)
 {
     return out << static_cast<int>(val);
 }
 
-template<typename T, typename std::enable_if<std::is_enum<T>::value>::type* = nullptr>
-inline QDataStream &operator>>(QDataStream &in, T &val)
+inline QDataStream&
+operator>>(QDataStream &in, Ms::MuseScoreStyleType &val)
 {
     int tmp;
     in >> tmp;
-    val = static_cast<T>(tmp);
+    val = static_cast<Ms::MuseScoreStyleType>(tmp);
     return in;
 }
+
+inline QDataStream&
+operator<<(QDataStream &out, const Ms::SessionStart &val)
+{
+    return out << static_cast<int>(val);
+}
+
+inline QDataStream&
+operator>>(QDataStream &in, Ms::SessionStart &val)
+{
+    int tmp;
+    in >> tmp;
+    val = static_cast<Ms::SessionStart>(tmp);
+    return in;
+}
+
+inline QDataStream&
+operator<<(QDataStream &out, const Ms::MusicxmlExportBreaks &val)
+{
+    return out << static_cast<int>(val);
+}
+
+inline QDataStream&
+operator>>(QDataStream &in, Ms::MusicxmlExportBreaks &val)
+{
+    int tmp;
+    in >> tmp;
+    val = static_cast<Ms::MusicxmlExportBreaks>(tmp);
+    return in;
+}
+
 
 class PreferenceVisitor {
    public:

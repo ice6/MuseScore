@@ -1567,18 +1567,27 @@
         <Cell name="Pizzicato" trElement="1">
           <StaffText>
             <channelSwitch voice="0" name="pizzicato"/>
+            <channelSwitch voice="1" name="pizzicato"/>
+            <channelSwitch voice="2" name="pizzicato"/>
+            <channelSwitch voice="3" name="pizzicato"/>
             <text>pizz.</text>
             </StaffText>
           </Cell>
         <Cell name="Arco" trElement="1">
           <StaffText>
             <channelSwitch voice="0" name="arco"/>
+            <channelSwitch voice="1" name="arco"/>
+            <channelSwitch voice="2" name="arco"/>
+            <channelSwitch voice="3" name="arco"/>
             <text>arco</text>
             </StaffText>
           </Cell>
         <Cell name="Tremolo" trElement="1">
           <StaffText>
             <channelSwitch voice="0" name="tremolo"/>
+            <channelSwitch voice="1" name="tremolo"/>
+            <channelSwitch voice="2" name="tremolo"/>
+            <channelSwitch voice="3" name="tremolo"/>
             <style>Expression</style>
             <text>tremolo</text>
             </StaffText>
@@ -1586,13 +1595,63 @@
         <Cell name="Mute" trElement="1">
           <StaffText>
             <channelSwitch voice="0" name="mute"/>
+            <channelSwitch voice="1" name="mute"/>
+            <channelSwitch voice="2" name="mute"/>
+            <channelSwitch voice="3" name="mute"/>
             <text>mute</text>
             </StaffText>
           </Cell>
         <Cell name="Open" trElement="1">
           <StaffText>
             <channelSwitch voice="0" name="open"/>
+            <channelSwitch voice="1" name="open"/>
+            <channelSwitch voice="2" name="open"/>
+            <channelSwitch voice="3" name="open"/>
             <text>open</text>
+            </StaffText>
+          </Cell>
+        <Cell name="Soprano/Alto" trElement="1">
+          <StaffText>
+            <channelSwitch voice="0" name="Soprano"/>
+            <channelSwitch voice="1" name="Alto"/>
+            <channelSwitch voice="2" name="Soprano"/>
+            <channelSwitch voice="3" name="Alto"/>
+            <visible>0</visible>
+            <track>0</track>
+            <text>S/A</text>
+            </StaffText>
+          </Cell>
+        <Cell name="Tenor/Bass" trElement="1">
+          <StaffText>
+            <channelSwitch voice="0" name="Tenor"/>
+            <channelSwitch voice="1" name="Bass"/>
+            <channelSwitch voice="2" name="Tenor"/>
+            <channelSwitch voice="3" name="Bass"/>
+            <visible>0</visible>
+            <track>0</track>
+            <text>T/B</text>
+            </StaffText>
+          </Cell>
+        <Cell name="Tenor/Lead" trElement="1">
+          <StaffText>
+            <channelSwitch voice="0" name="TENOR"/>
+            <channelSwitch voice="1" name="LEAD"/>
+            <channelSwitch voice="2" name="TENOR"/>
+            <channelSwitch voice="3" name="LEAD"/>
+            <visible>0</visible>
+            <track>0</track>
+            <text>T/L</text>
+            </StaffText>
+          </Cell>
+        <Cell name="Bari/Bass" trElement="1">
+          <StaffText>
+            <channelSwitch voice="0" name="BARI"/>
+            <channelSwitch voice="1" name="BASS"/>
+            <channelSwitch voice="2" name="BARI"/>
+            <channelSwitch voice="3" name="BASS"/>
+            <visible>0</visible>
+            <track>0</track>
+            <text>B/B</text>
             </StaffText>
           </Cell>
         </Palette>
@@ -1767,6 +1826,14 @@
             <tempo>2</tempo>
             <followText>1</followText>
             <text><sym>metNoteQuarterUp</sym> = <sym>metNoteQuarterUp</sym></text>
+            </Tempo>
+          </Cell>
+        <Cell name="Metric modulation">
+          <mag>1.5</mag>
+          <Tempo>
+            <tempo>2</tempo>
+            <followText>1</followText>
+            <text><sym>metNote8thUp</sym><sym>space</sym><sym>metAugmentationDot</sym> = <sym>metNoteQuarterUp</sym></text>
             </Tempo>
           </Cell>
         </Palette>

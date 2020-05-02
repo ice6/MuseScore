@@ -11,7 +11,6 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
-#include "musescore.h"
 #include "scoreview.h"
 #include "texttools.h"
 #include "libmscore/chordrest.h"
@@ -272,21 +271,6 @@ void ScoreView::harmonyTicksTab(const Fraction& ticks)
       TextCursor* cursor = harmony->cursor(editData);
       cursor->moveCursorToEnd();
       _score->update();
-      }
-
-//---------------------------------------------------------
-//   harmonyEndEdit
-//---------------------------------------------------------
-
-void ScoreView::harmonyEndEdit()
-      {
-      Harmony* harmony = toHarmony(editData.element);
-
-      if (harmony->empty()) {
-            _score->startCmd();
-            _score->undoRemoveElement(harmony);
-            _score->endCmd();
-            }
       }
 
 }

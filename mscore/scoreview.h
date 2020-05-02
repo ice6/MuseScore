@@ -15,6 +15,7 @@
 
 #include "globals.h"
 #include "libmscore/element.h"
+#include "libmscore/elementgroup.h"
 #include "libmscore/durationtype.h"
 #include "libmscore/mscore.h"
 #include "libmscore/mscoreview.h"
@@ -65,6 +66,42 @@ enum class MagIdx : char;
 //   ViewState
 //---------------------------------------------------------
 
+struct SmoothPanSettings {
+      double controlModifierBase          { 1 };
+      double controlModifierSteps         { 0.01 };
+      double minContinuousModifier        { 0.2 };
+      double maxContinuousModifier        { 5 };
+
+      // Changing the distance will change the sensitivity/accuracy/jitter of the algorithm. Larger absolut values are generally smoother.
+      double leftDistance                 { -250 };
+      double leftDistance1                { -125 };
+      double leftDistance2                { -50 };
+      double leftDistance3                { -25 };
+      double rightDistance                { 500 };
+      double rightDistance1               { 250 };
+      double rightDistance2               { 125 };
+      double rightDistance3               { 50 };
+      double leftMod1                     { 0.8 };
+      double leftMod2                     { 0.9 };
+      double leftMod3                     { 0.95 };
+      double rightMod1                    { 1.2 };
+      double rightMod2                    { 1.1 };
+      double rightMod3                    { 1.05 };
+
+      double controlCursorScreenPos       { 0.3 };
+
+      bool advancedWeighting              { false };  // enables the 'smart weight'
+      double normalWeight                 { 1 };
+      double smartWeight                  { 0 };      // uses the distance between the 2 cursors to calculate the speed of the control cursor
+      int cursorTimerDuration             { 1000 };   // how often the smart weight is updated
+
+      void loadFromPreferences();
+      };
+
+//---------------------------------------------------------
+//   ViewState
+//---------------------------------------------------------
+
 enum class ViewState {
       NORMAL,
       DRAG,
@@ -107,6 +144,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       const Element* dropTarget;    ///< current drop target during dragMove
       QRectF dropRectangle;         ///< current drop rectangle during dragMove
       QLineF dropAnchor;            ///< line to current anchor point during dragMove
+      QVector<QLineF> m_dropAnchorLines;
 
       QTransform _matrix, imatrix;
       MagIdx _magIdx;
@@ -114,9 +152,20 @@ class ScoreView : public QWidget, public MuseScoreView {
       QFocusFrame* focusFrame;
 
       EditData editData;
+      std::vector<std::unique_ptr<ElementGroup>> dragGroups;
 
       //--input state:
       PositionCursor* _cursor;
+
+      PositionCursor* _controlCursor;
+      SmoothPanSettings _panSettings;
+      double _timeElapsed;
+      double _controlModifier;      // a control modifier of 1 means that the cursor is moving at it's normal speed
+                                    // if all measures are of the same size, this will stay equal to 1 (unless the distance settings are changed, and make the algorithm over-sensitive)
+      double _playbackCursorOldPosition;
+      double _playbackCursorNewPosition;
+      double _playbackCursorDistanceTravelled;
+
       ShadowNote* shadowNote;
 
       // Realtime state:      Note: always set allowRealtimeRests to desired value before starting a timer.
@@ -200,17 +249,15 @@ class ScoreView : public QWidget, public MuseScoreView {
       virtual void lyricsMinus() override;
       virtual void lyricsUnderscore() override;
       virtual void textTab(bool back = false) override;
-      void harmonyEndEdit();
       void harmonyTab(bool back);
       void harmonyBeatsTab(bool noterest, bool back);
       void harmonyTicksTab(const Fraction& ticks);
       void figuredBassTab(bool meas, bool back);
       void figuredBassTicksTab(const Fraction& ticks);
-      void figuredBassEndEdit();
       void realtimeAdvance(bool allowRests);
       void cmdAddFret(int fret);
       void cmdAddChordName(HarmonyType ht);
-      void cmdAddText(Tid tid, Tid customTid = Tid::DEFAULT);
+      void cmdAddText(Tid tid, Tid customTid = Tid::DEFAULT, PropertyFlags pf = PropertyFlags::STYLED, Placement p = Placement::ABOVE);
       void cmdEnterRest(const TDuration&);
       void cmdEnterRest();
       void cmdTuplet(int n, ChordRest*);
@@ -284,6 +331,8 @@ class ScoreView : public QWidget, public MuseScoreView {
       bool normalPaste(Fraction scale = Fraction(1, 1));
       void normalSwap();
 
+      void setControlCursorVisible(bool v);
+
       void cloneElement(Element* e);
       void doFotoDragEdit(QMouseEvent* ev);
 
@@ -306,6 +355,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       void startEditMode(Element*);
 
       void moveCursor(const Fraction& tick);
+      void moveControlCursor(const Fraction& tick);
       Fraction cursorTick() const;
       void setCursorOn(bool);
       void setBackground(QPixmap*);
@@ -335,8 +385,8 @@ class ScoreView : public QWidget, public MuseScoreView {
       void doDragEdit(QMouseEvent* ev);
       bool testElementDragTransition(QMouseEvent* ev);
       bool fotoEditElementDragTransition(QMouseEvent* ev);
-      void addSlur(const Slur* slurTemplate = nullptr);
-      void cmdAddSlur(ChordRest*, ChordRest*, const Slur*) override;
+      void cmdAddSlur(const Slur* slurTemplate = nullptr);
+      void addSlur(ChordRest*, ChordRest*, const Slur*) override;
       virtual void cmdAddHairpin(HairpinType);
       void cmdAddNoteLine();
 
@@ -346,11 +396,12 @@ class ScoreView : public QWidget, public MuseScoreView {
       bool noteEntryMode() const { return state == ViewState::NOTE_ENTRY; }
       bool editMode() const      { return state == ViewState::EDIT; }
       bool textEditMode() const  { return editMode() && editData.element && editData.element->isTextBase(); }
+      bool hasEditGrips() const  { return editData.element && editData.grips; }
       bool fotoMode() const;
 
       virtual void setDropRectangle(const QRectF&);
       virtual void setDropTarget(const Element*) override;
-      void setDropAnchor(const QLineF&);
+      void setDropAnchorLines(const QVector<QLineF> &anchorList);
       const QTransform& matrix() const  { return _matrix; }
       qreal mag() const;
       qreal lmag() const;
@@ -403,6 +454,8 @@ class ScoreView : public QWidget, public MuseScoreView {
 
       virtual void moveCursor() override;
 
+      SmoothPanSettings* panSettings() { return &_panSettings; }
+
       virtual void layoutChanged();
       virtual void dataChanged(const QRectF&);
       virtual void updateAll()    { update(); }
@@ -423,10 +476,10 @@ class ScoreView : public QWidget, public MuseScoreView {
 
       virtual Element* elementNear(QPointF);
       QList<Element*> elementsNear(QPointF);
-      void editTremoloBarProperties(TremoloBar*);
       void editArticulationProperties(Articulation*);
       void editTimeSigProperties(TimeSig*);
       void editStaffTextProperties(StaffTextBase*);
+      void selectInstrument(InstrumentChange*);
       EditData& getEditData()        { return editData; }
       void changeState(ViewState);
 
@@ -435,6 +488,12 @@ class ScoreView : public QWidget, public MuseScoreView {
       void updateGrips();
       bool moveWhenInactive() const { return _moveWhenInactive; }
       bool moveWhenInactive(bool move) { bool m = _moveWhenInactive; _moveWhenInactive = move; return m; }
+
+      QElapsedTimer _controlCursorTimer, _playbackCursorTimer;
+      friend struct SmoothPanSettings;
+
+      private:
+         void drawAnchorLines(QPainter& painter);
       };
 
 } // namespace Ms
